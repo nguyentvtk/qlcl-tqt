@@ -3,7 +3,11 @@ Webapp Quản lý chất lượng thi công & Thanh quyết toán
 Theo Nghị định 207/2026/NĐ-CP, 193/2026/NĐ-CP, 254/2025/NĐ-CP
 Backend: FastAPI | Storage: Google Sheets API v4
 """
+import sys
 import os
+
+# Vercel runs from /var/task (repo root); add backend/ so local imports resolve
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.responses import Response, FileResponse
