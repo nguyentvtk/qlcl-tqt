@@ -1,0 +1,21 @@
+# Credentials
+credentials/service_account.json
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Uploads
+uploads/
+
+# OS
+.DS_Store
+Thumbs.db
+# Word/Excel temp lock files
+~$*
