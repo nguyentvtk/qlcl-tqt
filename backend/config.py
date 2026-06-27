@@ -40,6 +40,9 @@ SETTLEMENT_DEADLINE_MONTHS = {
     "group_C": 6,    # Dự án nhóm C
 }
 
+# Sheet Nhân sự — dùng gid để tìm chính xác tab, không phụ thuộc tên sheet
+NHANSU_GID = int(os.getenv("NHANSU_GID", "1028022447"))
+
 # Google Drive folder for uploaded dossier files (share this folder with the service account)
 GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
 

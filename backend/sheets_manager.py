@@ -200,6 +200,23 @@ def delete(sheet_name: str, record_id: str) -> bool:
     return False
 
 
+def get_sheet_by_gid(gid: int) -> Optional[gspread.Worksheet]:
+    """Tìm worksheet theo gid số (từ URL #gid=...)."""
+    ss = get_spreadsheet()
+    for ws in ss.worksheets():
+        if ws.id == gid:
+            return ws
+    return None
+
+
+def read_raw_values_by_gid(gid: int) -> list[list[str]]:
+    """Đọc tất cả giá trị (list of lists, gồm cả header) từ sheet xác định bằng gid."""
+    ws = get_sheet_by_gid(gid)
+    if ws is None:
+        return []
+    return ws.get_all_values()
+
+
 def ensure_all_schemas() -> dict[str, list[str]]:
     """
     Migrate tất cả schemas. Trả về dict sheet_name -> danh sách cột mới được thêm.
