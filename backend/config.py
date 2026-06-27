@@ -9,19 +9,23 @@ SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "1LsaccoqTu3sRaElEWVdCZjXlzRL_2N2DP
 GOOGLE_CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials/service_account.json")
 
 # Vercel/cloud: nếu không có file JSON thì đọc từ env var GOOGLE_CREDENTIALS_JSON (base64 hoặc raw JSON)
-_creds_env = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
+_creds_env = os.getenv("GOOGLE_CREDENTIALS_JSON", "").strip()
 if _creds_env and not os.path.isfile(GOOGLE_CREDENTIALS_FILE):
+    import json as _json
     try:
+        # Thử base64 decode trước
         try:
-            creds_str = base64.b64decode(_creds_env).decode("utf-8")
+            _decoded = base64.b64decode(_creds_env).decode("utf-8")
         except Exception:
-            creds_str = _creds_env
+            _decoded = _creds_env
+        # Chỉ ghi file nếu decode ra JSON hợp lệ
+        _json.loads(_decoded)   # ← validate trước khi ghi
         _tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        _tmp.write(creds_str)
+        _tmp.write(_decoded)
         _tmp.close()
         GOOGLE_CREDENTIALS_FILE = _tmp.name
     except Exception:
-        pass
+        pass  # JSON không hợp lệ → giữ nguyên GOOGLE_CREDENTIALS_FILE
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production-use-long-random-string")
 JWT_ALGORITHM = "HS256"

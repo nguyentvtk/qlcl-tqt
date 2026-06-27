@@ -81,7 +81,13 @@ async def login(body: LoginRequest):
         )
 
     # 2. Fallback: sheet users (tài khoản tạo trong app)
-    users = sm.read_where("users", email=body.email)
+    try:
+        users = sm.read_where("users", email=body.email)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail="Chưa cấu hình Google Credentials. Vào Vercel → Settings → Environment Variables → thêm GOOGLE_CREDENTIALS_JSON."
+        )
     if not users:
         raise HTTPException(status_code=401, detail="Không tìm thấy tài khoản")
 
