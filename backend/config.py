@@ -44,6 +44,9 @@ SETTLEMENT_DEADLINE_MONTHS = {
     "group_C": 6,    # Dự án nhóm C
 }
 
+# Vercel: tắt startup migration để tránh vượt quota Sheets API (set true sau khi đã setup xong)
+SKIP_MIGRATION = os.getenv("SKIP_MIGRATION", "false").lower() in ("true", "1", "yes")
+
 # Sheet Nhân sự — dùng gid để tìm chính xác tab, không phụ thuộc tên sheet
 NHANSU_GID = int(os.getenv("NHANSU_GID", "1028022447"))
 

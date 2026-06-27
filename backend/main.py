@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Literal
 
-from config import ALLOWED_ORIGINS
+from config import ALLOWED_ORIGINS, SKIP_MIGRATION
 from middleware.auth import get_current_user
 import sheets_manager as sm
 from schema_definitions import DEFAULT_DOSSIER_GROUPS, DEFAULT_DOSSIER_TEMPLATES
@@ -33,6 +33,11 @@ from routers import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: migrate schema, seed master data."""
+    if SKIP_MIGRATION:
+        print("ℹ️  Schema migration bị bỏ qua (SKIP_MIGRATION=true)")
+        yield
+        return
+
     print("⏳ Đang migrate schema Google Sheets...")
     try:
         added = sm.ensure_all_schemas()
@@ -42,7 +47,6 @@ async def lifespan(app: FastAPI):
             else:
                 print(f"  ✓  [{sheet}] Schema đã đủ")
 
-        # Seed master data nếu chưa có
         _seed_master_data()
         print("✅ Startup hoàn tất")
     except Exception as e:

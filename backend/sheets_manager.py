@@ -40,8 +40,11 @@ def get_or_create_sheet(sheet_name: str) -> gspread.Worksheet:
     try:
         return ss.worksheet(sheet_name)
     except gspread.WorksheetNotFound:
-        ws = ss.add_worksheet(title=sheet_name, rows=1000, cols=50)
-        return ws
+        try:
+            return ss.add_worksheet(title=sheet_name, rows=1000, cols=50)
+        except Exception:
+            # Race condition: instance khác đã tạo sheet → thử lấy lại
+            return ss.worksheet(sheet_name)
 
 
 def migrate_schema(sheet_name: str) -> dict[str, int]:
