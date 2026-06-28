@@ -84,10 +84,20 @@ def get_col_map(sheet_name: str) -> dict[str, int]:
 
 
 def read_all(sheet_name: str) -> list[dict]:
-    """Đọc tất cả records từ sheet, bỏ qua row header."""
+    """Đọc tất cả records từ sheet, bỏ qua row header.
+    Nếu sheet chưa có header (mới tạo, chưa migrate), tự động migrate và trả về [].
+    """
     ws = get_or_create_sheet(sheet_name)
-    records = ws.get_all_records(default_blank="")
-    return records
+    try:
+        records = ws.get_all_records(default_blank="")
+        return records
+    except Exception:
+        # Sheet chưa có header row → migrate schema rồi trả về danh sách rỗng
+        try:
+            migrate_schema(sheet_name)
+        except Exception:
+            pass
+        return []
 
 
 def read_by_id(sheet_name: str, record_id: str) -> Optional[dict]:
@@ -118,8 +128,7 @@ def insert(sheet_name: str, data: dict) -> dict:
     col_map = get_col_map(sheet_name)
 
     if not col_map:
-        migrate_schema(sheet_name)
-        col_map = get_col_map(sheet_name)
+        col_map = migrate_schema(sheet_name)
 
     # Auto-assign id
     if "id" not in data or not data["id"]:

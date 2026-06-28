@@ -76,7 +76,7 @@ async function loadProjects() {
         <td>${esc(p.investment_decision_number) || '—'}</td>
         <td>${fmtDate(p.created_at)}</td>
         <td>
-          <button class="btn btn-secondary btn-sm" onclick="viewConstructions('${esc(p.id)}','${esc(p.name)}')">📋 Hạng mục</button>
+          <button class="btn btn-secondary btn-sm" onclick="viewConstructions('${esc(p.id)}','${esc(p.name)}')">📋 Gói thầu</button>
           <button class="btn btn-secondary btn-sm" onclick="editProject('${esc(p.id)}')">✏️</button>
         </td>
       </tr>

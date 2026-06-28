@@ -3,18 +3,18 @@ import { esc, fmtDate, badge, toast, buildOptions } from '../utils.js';
 
 export async function renderConstructions(container) {
   const proj = window._currentProject || {};
-  const title = proj.name ? `Hạng mục công trình — ${proj.name}` : 'Hạng mục công trình';
+  const title = proj.name ? `Gói thầu — ${proj.name}` : 'Gói thầu';
 
   container.innerHTML = `
     ${proj.id ? `<div class="breadcrumb"><a href="#" onclick="navigate('projects')">Dự án</a> › <strong>${esc(proj.name)}</strong></div>` : ''}
     <div class="card">
       <div class="card-title">🏛️ ${title}
-        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openConstModal()">+ Thêm hạng mục</button>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openConstModal()">+ Thêm gói thầu</button>
       </div>
       <div class="table-wrapper">
         <table>
           <thead><tr>
-            <th>Mã HM</th><th>Tên hạng mục</th><th>Loại CT</th>
+            <th>Mã GT</th><th>Tên gói thầu</th><th>Loại CT</th>
             <th>Cấp CT</th><th>Ngày bắt đầu</th><th>Ngày hoàn thành DK</th><th>Hành động</th>
           </tr></thead>
           <tbody id="const-tbody"><tr><td colspan="7" style="text-align:center">Đang tải...</td></tr></tbody>
@@ -26,7 +26,7 @@ export async function renderConstructions(container) {
     <div class="modal-overlay hidden" id="const-modal">
       <div class="modal">
         <div class="modal-header">
-          <h3>Thêm hạng mục công trình</h3>
+          <h3>Thêm gói thầu</h3>
           <button class="modal-close" onclick="closeModal('const-modal')">✕</button>
         </div>
         <div class="modal-body">
@@ -36,8 +36,8 @@ export async function renderConstructions(container) {
               <input id="c-name" type="text" placeholder="Tên hạng mục công trình..." />
             </div>
             <div class="form-group">
-              <label>Mã hạng mục</label>
-              <input id="c-code" type="text" placeholder="VD: HM-001" />
+              <label>Mã gói thầu</label>
+              <input id="c-code" type="text" placeholder="VD: GT-001" />
             </div>
             <div class="form-group">
               <label>Loại công trình *</label>
@@ -88,7 +88,7 @@ async function loadConstructions() {
       : [];
 
     if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">🏛️</div><p>Chưa có hạng mục nào${proj.id ? ' cho dự án này' : ''}</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">🏛️</div><p>Chưa có gói thầu nào${proj.id ? ' cho dự án này' : ''}</p></div></td></tr>`;
       return;
     }
 
@@ -151,7 +151,7 @@ window.saveConstruction = async function() {
 
   try {
     await projects.createConstruction(proj.id, data);
-    toast('Thêm hạng mục thành công');
+    toast('Thêm gói thầu thành công');
     closeModal('const-modal');
     await loadConstructions();
   } catch (err) {

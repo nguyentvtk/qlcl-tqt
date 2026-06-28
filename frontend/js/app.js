@@ -16,7 +16,7 @@ const PAGES = {
   dashboard:     { title: 'Dashboard', icon: '📊', render: renderDashboard },
   organizations: { title: 'Tổ chức', icon: '🏢', render: renderOrganizations },
   projects:      { title: 'Dự án', icon: '🏗️', render: renderProjects },
-  constructions: { title: 'Hạng mục công trình', icon: '🏛️', render: renderConstructions },
+  constructions: { title: 'Gói thầu', icon: '🏛️', render: renderConstructions },
   dossiers:      { title: 'Hồ sơ & Nghiệm thu', icon: '📁', render: renderDossiers },
   contracts:     { title: 'Hợp đồng & Thanh toán', icon: '💰', render: renderContracts },
   settlements:   { title: 'Quyết toán', icon: '📋', render: renderSettlements },
