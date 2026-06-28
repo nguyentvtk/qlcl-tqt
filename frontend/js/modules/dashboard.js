@@ -18,8 +18,19 @@ export async function renderDashboard(container) {
     </div>
   `;
 
+  async function fetchWithRetry(retries = 2, delayMs = 1200) {
+    for (let i = 0; i <= retries; i++) {
+      try {
+        return await dashboard.get();
+      } catch (err) {
+        if (i === retries) throw err;
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  }
+
   try {
-    const data = await dashboard.get();
+    const data = await fetchWithRetry();
 
     document.getElementById('stats-grid').innerHTML = `
       <div class="stat-card" style="cursor:pointer" onclick="navigate('projects')">
@@ -67,6 +78,21 @@ export async function renderDashboard(container) {
       : `<div class="alert alert-success">✓ Không có cảnh báo nào tồn đọng.</div>`;
 
   } catch (err) {
-    container.innerHTML = `<div class="alert alert-danger">Lỗi tải dashboard: ${err.message}</div>`;
+    // Chỉ hiển thị lỗi tại phần stats, không xóa toàn bộ container
+    const grid = document.getElementById('stats-grid');
+    if (grid) {
+      grid.innerHTML = `
+        <div style="grid-column:1/-1">
+          <div class="alert alert-danger" style="margin:0">
+            ⚠️ Không tải được dữ liệu (${err.message || 'lỗi kết nối'}).
+            <button class="btn btn-secondary btn-sm" style="margin-left:12px"
+              onclick="navigate('dashboard')">🔄 Thử lại</button>
+          </div>
+        </div>`;
+    }
+    const pending = document.getElementById('pending-list');
+    if (pending) pending.innerHTML = '';
+    const alerts = document.getElementById('alert-list');
+    if (alerts) alerts.innerHTML = '';
   }
 }

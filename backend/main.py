@@ -145,20 +145,32 @@ async def api_overlay_as_built_stamp(
 @app.get("/api/v1/dashboard", tags=["Dashboard"])
 async def dashboard(_: dict = Depends(get_current_user)):
     """Thống kê tổng hợp cho dashboard — đọc trực tiếp từ sheet gốc tiếng Việt."""
+    def safe_read_vi(sheet_name: str) -> list:
+        try:
+            return sm.read_sheet_by_name_raw(sheet_name)
+        except Exception:
+            return []
+
+    def safe_read_app(sheet_name: str) -> list:
+        try:
+            return sm.read_all(sheet_name)
+        except Exception:
+            return []
+
     # Sheet gốc (tiếng Việt)
-    du_an_rows      = sm.read_sheet_by_name_raw("Dự án")
-    goi_thau_rows   = sm.read_sheet_by_name_raw("Gói thầu")
-    hop_dong_rows   = sm.read_sheet_by_name_raw("Hợp đồng")
-    nghiem_thu_rows = sm.read_sheet_by_name_raw("Nghiệm thu")
-    nha_thau_rows   = sm.read_sheet_by_name_raw("Nhà thầu")
-    quyet_toan_rows = sm.read_sheet_by_name_raw("Quyết toán DAHT")
+    du_an_rows      = safe_read_vi("Dự án")
+    goi_thau_rows   = safe_read_vi("Gói thầu")
+    hop_dong_rows   = safe_read_vi("Hợp đồng")
+    nghiem_thu_rows = safe_read_vi("Nghiệm thu")
+    nha_thau_rows   = safe_read_vi("Nhà thầu")
+    quyet_toan_rows = safe_read_vi("Quyết toán DAHT")
 
     # App-managed (bổ sung)
-    app_projects      = sm.read_all("projects")
-    app_constructions = sm.read_all("constructions")
-    app_dossiers      = sm.read_all("construction_dossiers")
-    app_payments      = sm.read_all("payment_requests")
-    warnings          = sm.read_all("contractor_settlement_warnings")
+    app_projects      = safe_read_app("projects")
+    app_constructions = safe_read_app("constructions")
+    app_dossiers      = safe_read_app("construction_dossiers")
+    app_payments      = safe_read_app("payment_requests")
+    warnings          = safe_read_app("contractor_settlement_warnings")
 
     # Tổng hợp không trùng
     vi_project_codes = {str(r.get("Mã DA", "")).strip() for r in du_an_rows if r.get("Mã DA")}
