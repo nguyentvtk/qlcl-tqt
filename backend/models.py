@@ -57,9 +57,17 @@ class TokenResponse(BaseModel):
 class ProjectCreate(BaseModel):
     name: str
     project_code: str
-    location: str
-    owner_id: str
+    location: Optional[str] = None
+    owner_id: Optional[str] = None
     investment_decision_number: Optional[str] = None
+    # Trường mở rộng từ sheet "Dự án"
+    description: Optional[str] = None
+    project_type: Optional[str] = None          # Loại Dự án
+    status: Optional[str] = None                # Trạng thái dự án
+    total_investment: Optional[str] = None      # Tổng mức đầu tư
+    start_date: Optional[str] = None            # Ngày bắt đầu
+    end_date: Optional[str] = None              # Ngày kết thúc
+    disbursed_amount: Optional[str] = None      # Số giải ngân
 
 
 class Project(ProjectCreate):

@@ -221,6 +221,17 @@ def get_sheet_by_gid(gid: int) -> Optional[gspread.Worksheet]:
     return None
 
 
+def read_sheet_by_name_raw(sheet_name: str) -> list[dict]:
+    """Đọc sheet theo tên (có thể là tiếng Việt), trả về list of dicts với key là tên cột header.
+    Trả về [] nếu sheet không tồn tại hoặc lỗi.
+    """
+    try:
+        ws = get_spreadsheet().worksheet(sheet_name)
+        return ws.get_all_records(default_blank="")
+    except Exception:
+        return []
+
+
 def read_raw_values_by_gid(gid: int) -> list[list[str]]:
     """Đọc tất cả giá trị (list of lists, gồm cả header) từ sheet xác định bằng gid."""
     ws = get_sheet_by_gid(gid)

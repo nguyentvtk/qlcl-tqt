@@ -9,8 +9,8 @@ export async function renderProjects(container, _params) {
     <div class="table-wrapper">
       <table>
         <thead><tr>
-          <th>Mã DA</th><th>Tên dự án</th><th>Địa điểm</th>
-          <th>Quyết định đầu tư</th><th>Ngày tạo</th><th>Hành động</th>
+          <th>Mã DA</th><th>Tên dự án</th><th>Loại DA</th>
+          <th>Trạng thái</th><th>Tổng mức ĐT</th><th>Hành động</th>
         </tr></thead>
         <tbody id="project-tbody"><tr><td colspan="6" style="text-align:center">Đang tải...</td></tr></tbody>
       </table>
@@ -68,19 +68,28 @@ async function loadProjects() {
       tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon">🏗️</div><p>Chưa có dự án nào</p></div></td></tr>`;
       return;
     }
-    tbody.innerHTML = list.map(p => `
+    const STATUS_BADGE = {
+      'Đang thực hiện': 'background:#d1fae5;color:#065f46',
+      'Tạm ngưng':      'background:#fef3c7;color:#92400e',
+      'Chưa triển khai':'background:#e5e7eb;color:#374151',
+      'Hoàn thành':     'background:#dbeafe;color:#1e40af',
+    };
+    tbody.innerHTML = list.map(p => {
+      const st = p.status || '';
+      const stStyle = STATUS_BADGE[st] || 'background:#e5e7eb;color:#374151';
+      const inv = p.total_investment ? Number(String(p.total_investment).replace(/[^0-9]/g,'')).toLocaleString('vi-VN') + ' đ' : '—';
+      return `
       <tr>
         <td><strong>${esc(p.project_code)}</strong></td>
         <td>${esc(p.name)}</td>
-        <td>${esc(p.location)}</td>
-        <td>${esc(p.investment_decision_number) || '—'}</td>
-        <td>${fmtDate(p.created_at)}</td>
+        <td>${esc(p.project_type) || '—'}</td>
+        <td>${st ? `<span style="padding:2px 8px;border-radius:4px;font-size:12px;${stStyle}">${esc(st)}</span>` : '—'}</td>
+        <td style="white-space:nowrap">${inv}</td>
         <td>
           <button class="btn btn-secondary btn-sm" onclick="viewConstructions('${esc(p.id)}','${esc(p.name)}')">📋 Gói thầu</button>
-          <button class="btn btn-secondary btn-sm" onclick="editProject('${esc(p.id)}')">✏️</button>
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="6"><div class="alert alert-danger">${err.message}</div></td></tr>`;
   }
