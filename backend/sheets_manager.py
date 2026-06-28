@@ -86,13 +86,14 @@ def get_col_map(sheet_name: str) -> dict[str, int]:
 def read_all(sheet_name: str) -> list[dict]:
     """Đọc tất cả records từ sheet, bỏ qua row header.
     Nếu sheet chưa có header (mới tạo, chưa migrate), tự động migrate và trả về [].
+    Mọi lỗi (kết nối, quota, cold-start) đều được bắt → trả về [] thay vì raise 500.
     """
-    ws = get_or_create_sheet(sheet_name)
     try:
+        ws = get_or_create_sheet(sheet_name)
         records = ws.get_all_records(default_blank="")
         return records
     except Exception:
-        # Sheet chưa có header row → migrate schema rồi trả về danh sách rỗng
+        # Sheet chưa có header row hoặc lỗi kết nối → migrate schema rồi trả về []
         try:
             migrate_schema(sheet_name)
         except Exception:
