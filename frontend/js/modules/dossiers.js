@@ -30,11 +30,11 @@ export async function renderDossiers(container) {
         <div class="table-wrapper">
           <table>
             <thead><tr>
-              <th>Tên hồ sơ</th><th>Số hiệu</th><th>Nhóm</th>
-              <th>Định dạng</th><th>Trạng thái</th><th>SLA</th>
-              <th>Ngày nộp</th><th>Hành động</th>
+              <th>Mã HSNT</th><th>Tên hồ sơ</th><th>Mã HĐ</th>
+              <th>Lần NT</th><th>Ngày NT</th><th>Giá trị NT</th>
+              <th>Nhà thầu</th><th>Trạng thái</th><th>Hành động</th>
             </tr></thead>
-            <tbody id="dossier-tbody"><tr><td colspan="8" style="text-align:center">Đang tải...</td></tr></tbody>
+            <tbody id="dossier-tbody"><tr><td colspan="9" style="text-align:center">Đang tải...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -214,7 +214,7 @@ async function loadDossiers() {
     const list = await dossiers.list(params);
 
     if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">📁</div><p>Chưa có hồ sơ nào</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">📁</div><p>Chưa có hồ sơ nghiệm thu nào</p></div></td></tr>`;
       return;
     }
 
@@ -222,15 +222,16 @@ async function loadDossiers() {
 
     tbody.innerHTML = list.map(d => `
       <tr>
-        <td><strong>${esc(d.document_name)}</strong></td>
-        <td>${esc(d.document_number) || '—'}</td>
-        <td>${esc(tpl[d.template_id]?.group?.name || '—')}</td>
-        <td>${_formatType(d.format_type)}</td>
+        <td><strong>${esc(d.document_number || d.id)}</strong></td>
+        <td>${esc(d.document_name)}</td>
+        <td>${esc(d.contract_id) || '—'}</td>
+        <td>${esc(d.acceptance_round) ? `Lần ${esc(d.acceptance_round)}` : '—'}</td>
+        <td>${fmtDate(d.sign_date) || fmtDate(d.request_date) || '—'}</td>
+        <td style="text-align:right">${esc(d.payment_amount) || '—'}</td>
+        <td>${esc(d.contractor_name) || '—'}</td>
         <td>${badge(d.status)}</td>
-        <td>${d.status === 'PENDING' ? slaStatus(d.uploaded_at ? _add24h(d.uploaded_at) : null) : '—'}</td>
-        <td>${fmtDate(d.uploaded_at)}</td>
         <td>
-          <a href="${dossiers.fileUrl(d.id)}" target="_blank" class="btn btn-secondary btn-sm">📎</a>
+          ${d.file_path ? `<a href="${dossiers.fileUrl(d.id)}" target="_blank" class="btn btn-secondary btn-sm">📎</a>` : ''}
           ${d.status === 'PENDING' ? `<button class="btn btn-primary btn-sm" onclick="openApproval('${esc(d.id)}')">✓/✗</button>` : ''}
           <button class="btn btn-secondary btn-sm" onclick="viewHistory('${esc(d.id)}')">📜</button>
         </td>

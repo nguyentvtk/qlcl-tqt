@@ -4,16 +4,16 @@ import { esc, fmtDate, toast } from '../utils.js';
 export async function renderOrganizations(container) {
   container.innerHTML = `
     <div class="card">
-      <div class="card-title">🏢 Quản lý tổ chức
-        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openOrgModal()">+ Thêm tổ chức</button>
+      <div class="card-title">🏢 Danh sách Nhà thầu
+        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openOrgModal()">+ Thêm nhà thầu</button>
       </div>
       <div class="table-wrapper">
         <table>
           <thead><tr>
-            <th>Tên tổ chức</th><th>Mã số thuế</th><th>Địa chỉ</th>
-            <th>Điện thoại</th><th>Ngày tạo</th><th>Hành động</th>
+            <th>Tên nhà thầu</th><th>Mã số thuế</th><th>Địa chỉ</th>
+            <th>Đại diện</th><th>Hành động</th>
           </tr></thead>
-          <tbody id="org-tbody"><tr><td colspan="6" style="text-align:center">Đang tải...</td></tr></tbody>
+          <tbody id="org-tbody"><tr><td colspan="5" style="text-align:center">Đang tải...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -60,7 +60,7 @@ async function loadOrgs() {
   try {
     const list = await organizations.list();
     if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon">🏢</div><p>Chưa có tổ chức nào</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">🏢</div><p>Chưa có nhà thầu nào</p></div></td></tr>`;
     } else {
       tbody.innerHTML = list.map(o => `
         <tr>
@@ -68,7 +68,6 @@ async function loadOrgs() {
           <td>${esc(o.tax_code) || '—'}</td>
           <td>${esc(o.address) || '—'}</td>
           <td>${esc(o.phone) || '—'}</td>
-          <td>${fmtDate(o.created_at)}</td>
           <td>
             <button class="btn btn-secondary btn-sm" onclick="editOrg('${esc(o.id)}')">✏️ Sửa</button>
           </td>

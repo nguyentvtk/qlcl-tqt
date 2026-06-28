@@ -144,27 +144,58 @@ async def api_overlay_as_built_stamp(
 # ─── Dashboard ───────────────────────────────────────────────────
 @app.get("/api/v1/dashboard", tags=["Dashboard"])
 async def dashboard(_: dict = Depends(get_current_user)):
-    """Thống kê tổng hợp cho dashboard."""
-    projects = sm.read_all("projects")
-    constructions = sm.read_all("constructions")
-    dossiers = sm.read_all("construction_dossiers")
-    payments = sm.read_all("payment_requests")
-    warnings = sm.read_all("contractor_settlement_warnings")
+    """Thống kê tổng hợp cho dashboard — đọc trực tiếp từ sheet gốc tiếng Việt."""
+    # Sheet gốc (tiếng Việt)
+    du_an_rows      = sm.read_sheet_by_name_raw("Dự án")
+    goi_thau_rows   = sm.read_sheet_by_name_raw("Gói thầu")
+    hop_dong_rows   = sm.read_sheet_by_name_raw("Hợp đồng")
+    nghiem_thu_rows = sm.read_sheet_by_name_raw("Nghiệm thu")
+    nha_thau_rows   = sm.read_sheet_by_name_raw("Nhà thầu")
+    quyet_toan_rows = sm.read_sheet_by_name_raw("Quyết toán DAHT")
 
-    pending_dossiers = [d for d in dossiers if d.get("status") == "PENDING"]
-    approved_dossiers = [d for d in dossiers if d.get("status") == "APPROVED"]
-    draft_payments = [p for p in payments if p.get("internal_status") == "DRAFT"]
-    unresponded_warnings = [w for w in warnings if w.get("contractor_response_status") == "NO_RESPONSE"]
+    # App-managed (bổ sung)
+    app_projects      = sm.read_all("projects")
+    app_constructions = sm.read_all("constructions")
+    app_dossiers      = sm.read_all("construction_dossiers")
+    app_payments      = sm.read_all("payment_requests")
+    warnings          = sm.read_all("contractor_settlement_warnings")
+
+    # Tổng hợp không trùng
+    vi_project_codes = {str(r.get("Mã DA", "")).strip() for r in du_an_rows if r.get("Mã DA")}
+    app_project_codes = {str(r.get("project_code", "")).strip() for r in app_projects}
+    total_projects = len(vi_project_codes | app_project_codes)
+
+    vi_gt_ids = {f"{str(r.get('Mã DA','')).strip()}_{str(r.get('Mã GT','')).strip()}" for r in goi_thau_rows if r.get("Mã GT")}
+    app_gt_ids = {str(r.get("id", "")).strip() for r in app_constructions}
+    total_constructions = len(vi_gt_ids | app_gt_ids)
+
+    total_contracts = len(hop_dong_rows) + len(app_payments)  # contract count
+    active_contracts = len([r for r in hop_dong_rows if str(r.get("Trạng thái HĐ","")).strip() not in ("Đã hết hạn","Đã quyết toán","Thanh lý")])
+
+    total_nt = len(nghiem_thu_rows) + len(app_dossiers)
+    pending_nt = len([r for r in nghiem_thu_rows if "Chờ" in str(r.get("Trạng thái HSNT",""))]) + \
+                 len([d for d in app_dossiers if d.get("status") == "PENDING"])
+    approved_nt = len([r for r in nghiem_thu_rows if "Đã thanh toán" in str(r.get("Trạng thái HSNT",""))]) + \
+                  len([d for d in app_dossiers if d.get("status") == "APPROVED"])
+
+    total_organizations = len([r for r in nha_thau_rows if r.get("Tên Nhà thầu")])
+
+    payments_draft = len([p for p in app_payments if p.get("internal_status") == "DRAFT"])
+    unresponded_warnings = len([w for w in warnings if w.get("contractor_response_status") == "NO_RESPONSE"])
 
     return {
-        "projects_total": len(projects),
-        "constructions_total": len(constructions),
-        "dossiers_total": len(dossiers),
-        "dossiers_pending": len(pending_dossiers),
-        "dossiers_approved": len(approved_dossiers),
-        "payments_total": len(payments),
-        "payments_draft": len(draft_payments),
-        "warnings_unresponded": len(unresponded_warnings),
+        "projects_total": total_projects,
+        "constructions_total": total_constructions,
+        "contracts_total": len(hop_dong_rows),
+        "contracts_active": active_contracts,
+        "dossiers_total": total_nt,
+        "dossiers_pending": pending_nt,
+        "dossiers_approved": approved_nt,
+        "organizations_total": total_organizations,
+        "settlements_total": len([r for r in quyet_toan_rows if r.get("Mã QT")]),
+        "payments_total": len(app_payments),
+        "payments_draft": payments_draft,
+        "warnings_unresponded": unresponded_warnings,
     }
 
 

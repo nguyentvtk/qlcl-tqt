@@ -20,17 +20,53 @@ import sheets_manager as sm
 router = APIRouter(prefix="/api/v1/settlements", tags=["Quyết toán"])
 
 
+# ─── Helpers: Quyết toán DAHT ──────────────────────────────────────
+def _map_quyet_toan_row(r: dict) -> Settlement | None:
+    ma_qt = str(r.get("Mã QT", "")).strip()
+    ma_da = str(r.get("Mã DA", "")).strip()
+    if not ma_qt and not ma_da:
+        return None
+    return Settlement(
+        id=ma_qt or ma_da,
+        project_id=ma_da,
+        proposed_settlement_amount=sm.parse_vn_number(r.get("Giá trị đề nghị quyết toán", 0)),
+        approver_org_id=str(r.get("Chủ đầu tư", "")),
+        verifier_org_id=str(r.get("Cơ quan thẩm tra (Kính gửi)", r.get("Cơ quan thẩm tra", ""))) or None,
+        submission_deadline=str(r.get("Ngày lập", "")),
+        status=str(r.get("Trạng thái", "PREPARING")) or "PREPARING",
+        approved_decision_number=str(r.get("Số tờ trình", "")),
+    )
+
+
 # ─── Project Settlements ────────────────────────────────────────────
 @router.get("", response_model=list[Settlement])
 async def list_settlements(
     project_id: Optional[str] = None,
     _: dict = Depends(get_current_user)
 ):
-    if project_id:
-        records = sm.read_where("project_settlements", project_id=project_id)
-    else:
-        records = sm.read_all("project_settlements")
-    return [Settlement(**r) for r in records]
+    # 1. Sheet "Quyết toán DAHT"
+    result: list[Settlement] = []
+    seen_ids: set[str] = set()
+    for row in sm.read_sheet_by_name_raw("Quyết toán DAHT"):
+        if project_id and str(row.get("Mã DA", "")).strip() != project_id:
+            continue
+        s = _map_quyet_toan_row(row)
+        if s and s.id not in seen_ids:
+            result.append(s)
+            seen_ids.add(s.id)
+
+    # 2. App-created settlements
+    app_records = sm.read_where("project_settlements", project_id=project_id) if project_id else sm.read_all("project_settlements")
+    for r in app_records:
+        try:
+            s = Settlement(**r)
+            if s.id not in seen_ids:
+                result.append(s)
+                seen_ids.add(s.id)
+        except Exception:
+            pass
+
+    return result
 
 
 @router.get("/{settlement_id}", response_model=Settlement)

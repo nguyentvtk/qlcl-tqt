@@ -221,6 +221,15 @@ def get_sheet_by_gid(gid: int) -> Optional[gspread.Worksheet]:
     return None
 
 
+def parse_vn_number(s) -> float:
+    """Chuyển số định dạng VN ('234.824.000', '99,88%') sang float."""
+    try:
+        cleaned = str(s).strip().replace('.', '').replace(',', '.').rstrip('%').strip()
+        return float(cleaned) if cleaned else 0.0
+    except Exception:
+        return 0.0
+
+
 def read_sheet_by_name_raw(sheet_name: str) -> list[dict]:
     """Đọc sheet theo tên (có thể là tiếng Việt), trả về list of dicts với key là tên cột header.
     Trả về [] nếu sheet không tồn tại hoặc lỗi.

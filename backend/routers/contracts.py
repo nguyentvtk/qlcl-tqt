@@ -20,17 +20,70 @@ import sheets_manager as sm
 router = APIRouter(prefix="/api/v1/contracts", tags=["Hợp đồng & Thanh toán"])
 
 
+# ─── Helpers: Hợp đồng ──────────────────────────────────────────────
+def _map_hop_dong_row(r: dict) -> Contract | None:
+    """Chuyển hàng sheet 'Hợp đồng' sang Contract model."""
+    ma_hd  = str(r.get("Mã HĐ", "")).strip()
+    ma_gt  = str(r.get("Mã GT", "")).strip()
+    ma_da  = str(r.get("Mã DA", "")).strip()
+    ten_hd = str(r.get("Tên HĐ", "")).strip()
+    if not ma_hd:
+        return None
+    return Contract(
+        id=f"{ma_da}_{ma_gt}_{ma_hd}",
+        contract_number=ma_hd,
+        construction_id=f"{ma_da}_{ma_gt}",
+        project_code=ma_da,
+        bid_package_code=ma_gt,
+        contract_name=ten_hd,
+        contract_type=str(r.get("Loại HĐ", "")),
+        contractor_name=str(r.get("Nhà thầu", "")),
+        sign_date=str(r.get("Ngày ký", "")),
+        contract_value_vnd=sm.parse_vn_number(r.get("Giá HĐ/Trúng thầu", 0)),
+        settlement_value=sm.parse_vn_number(r.get("Giá quyết toán", 0)) or None,
+        total_paid_volume_vnd=sm.parse_vn_number(r.get("Lũy kế thanh toán", 0)),
+        duration_days=str(r.get("Thời gian HĐ (ngày)", "")),
+        effective_date=str(r.get("Ngày hiệu lực", "")),
+        expiry_date=str(r.get("Ngày hết hạn", "")),
+        contract_status=str(r.get("Trạng thái HĐ", "ACTIVE")),
+    )
+
+
 # ─── Contracts ──────────────────────────────────────────────────────
 @router.get("", response_model=list[Contract])
 async def list_contracts(
     construction_id: Optional[str] = None,
+    project_code: Optional[str] = None,
     _: dict = Depends(get_current_user)
 ):
-    if construction_id:
-        records = sm.read_where("contracts", construction_id=construction_id)
-    else:
-        records = sm.read_all("contracts")
-    return [Contract(**r) for r in records]
+    # 1. Sheet "Hợp đồng"
+    result: list[Contract] = []
+    seen_ids: set[str] = set()
+    for row in sm.read_sheet_by_name_raw("Hợp đồng"):
+        ma_da = str(row.get("Mã DA", "")).strip()
+        ma_gt = str(row.get("Mã GT", "")).strip()
+        cid   = f"{ma_da}_{ma_gt}"
+        if construction_id and cid != construction_id:
+            continue
+        if project_code and ma_da != project_code:
+            continue
+        c = _map_hop_dong_row(row)
+        if c and c.id not in seen_ids:
+            result.append(c)
+            seen_ids.add(c.id)
+
+    # 2. App-created contracts
+    app_records = sm.read_where("contracts", construction_id=construction_id) if construction_id else sm.read_all("contracts")
+    for r in app_records:
+        try:
+            c = Contract(**r)
+            if c.id not in seen_ids:
+                result.append(c)
+                seen_ids.add(c.id)
+        except Exception:
+            pass
+
+    return result
 
 
 @router.get("/{contract_id}", response_model=Contract)

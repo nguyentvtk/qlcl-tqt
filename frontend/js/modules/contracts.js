@@ -21,10 +21,10 @@ export async function renderContracts(container) {
         <div class="table-wrapper">
           <table>
             <thead><tr>
-              <th>Số HĐ</th><th>Ngày ký</th><th>Giá trị HĐ</th>
-              <th>Tạm ứng %</th><th>Giảm trừ %</th><th>Trạng thái</th><th>Hành động</th>
+              <th>Số HĐ</th><th>Tên HĐ</th><th>Nhà thầu</th>
+              <th>Ngày ký</th><th>Giá trị HĐ</th><th>Lũy kế TT</th><th>Trạng thái</th><th>Hành động</th>
             </tr></thead>
-            <tbody id="contract-tbody"><tr><td colspan="7" style="text-align:center">Đang tải...</td></tr></tbody>
+            <tbody id="contract-tbody"><tr><td colspan="8" style="text-align:center">Đang tải...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -209,10 +209,11 @@ async function loadContracts() {
       tbody.innerHTML = _contractList.map(c => `
         <tr>
           <td><strong>${esc(c.contract_number)}</strong></td>
+          <td>${esc(c.contract_name) || '—'}</td>
+          <td>${esc(c.contractor_name) || '—'}</td>
           <td>${fmtDate(c.sign_date)}</td>
           <td class="currency">${fmt(c.contract_value_vnd)}</td>
-          <td>${c.advance_percentage || 0}%</td>
-          <td>${c.retention_percentage || 0}%</td>
+          <td class="currency">${c.total_paid_volume_vnd ? fmt(c.total_paid_volume_vnd) : '—'}</td>
           <td>${badge(c.contract_status || 'ACTIVE')}</td>
           <td>
             <button class="btn btn-secondary btn-sm" onclick="window._paymentContractId='${esc(c.id)}';switchContractTab('payments',document.querySelectorAll('.tab')[1]);loadPaymentsForContract('${esc(c.id)}')">💰 TT</button>
@@ -227,7 +228,7 @@ async function loadContracts() {
     if (sel) sel.innerHTML = `<option value="">-- Chọn hợp đồng --</option>` + buildOptions(_contractList, 'id', 'contract_number');
     if (pmSel) pmSel.innerHTML = `<option value="">-- Chọn hợp đồng --</option>` + buildOptions(_contractList, 'id', 'contract_number');
   } catch (err) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7"><div class="alert alert-danger">${err.message}</div></td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="alert alert-danger">${err.message}</div></td></tr>`;
   }
 }
 

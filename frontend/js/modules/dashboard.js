@@ -4,7 +4,7 @@ import { fmt } from '../utils.js';
 export async function renderDashboard(container) {
   container.innerHTML = `
     <div class="stats-grid" id="stats-grid">
-      ${[...Array(4)].map(() => `<div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Đang tải...</div></div>`).join('')}
+      ${[...Array(8)].map(() => `<div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Đang tải...</div></div>`).join('')}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div class="card">
@@ -22,29 +22,37 @@ export async function renderDashboard(container) {
     const data = await dashboard.get();
 
     document.getElementById('stats-grid').innerHTML = `
-      <div class="stat-card">
-        <div class="stat-value">${data.projects_total}</div>
-        <div class="stat-label">Dự án</div>
+      <div class="stat-card" style="cursor:pointer" onclick="navigate('projects')">
+        <div class="stat-value">${data.projects_total ?? 0}</div>
+        <div class="stat-label">📁 Dự án</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-value">${data.constructions_total}</div>
-        <div class="stat-label">Hạng mục công trình</div>
+      <div class="stat-card" style="cursor:pointer" onclick="navigate('constructions')">
+        <div class="stat-value">${data.constructions_total ?? 0}</div>
+        <div class="stat-label">🏛️ Gói thầu</div>
       </div>
-      <div class="stat-card warning-card">
-        <div class="stat-value" style="color:var(--warning)">${data.dossiers_pending}</div>
-        <div class="stat-label">Hồ sơ chờ duyệt</div>
+      <div class="stat-card" style="cursor:pointer" onclick="navigate('contracts')">
+        <div class="stat-value">${data.contracts_total ?? 0}</div>
+        <div class="stat-label">💰 Hợp đồng <small style="font-size:11px;color:var(--success)">${data.contracts_active ?? 0} đang hiệu lực</small></div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="navigate('organizations')">
+        <div class="stat-value">${data.organizations_total ?? 0}</div>
+        <div class="stat-label">🏢 Nhà thầu</div>
+      </div>
+      <div class="stat-card warning-card" style="cursor:pointer" onclick="navigate('dossiers')">
+        <div class="stat-value" style="color:var(--warning)">${data.dossiers_pending ?? 0}</div>
+        <div class="stat-label">📁 Nghiệm thu chờ duyệt</div>
       </div>
       <div class="stat-card success-card">
-        <div class="stat-value" style="color:var(--success)">${data.dossiers_approved}</div>
-        <div class="stat-label">Hồ sơ đã duyệt</div>
+        <div class="stat-value" style="color:var(--success)">${data.dossiers_approved ?? 0}</div>
+        <div class="stat-label">✅ Nghiệm thu đã duyệt</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-value">${data.payments_total}</div>
-        <div class="stat-label">Yêu cầu thanh toán</div>
+      <div class="stat-card" style="cursor:pointer" onclick="navigate('settlements')">
+        <div class="stat-value">${data.settlements_total ?? 0}</div>
+        <div class="stat-label">📋 Quyết toán</div>
       </div>
       <div class="stat-card danger-card">
-        <div class="stat-value" style="color:var(--danger)">${data.warnings_unresponded}</div>
-        <div class="stat-label">Cảnh báo chưa phản hồi</div>
+        <div class="stat-value" style="color:var(--danger)">${data.warnings_unresponded ?? 0}</div>
+        <div class="stat-label">⚠️ Cảnh báo tồn đọng</div>
       </div>
     `;
 

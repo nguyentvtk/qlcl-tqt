@@ -14,8 +14,8 @@ export async function renderConstructions(container) {
       <div class="table-wrapper">
         <table>
           <thead><tr>
-            <th>Mã GT</th><th>Tên gói thầu</th><th>Loại CT</th>
-            <th>Cấp CT</th><th>Ngày bắt đầu</th><th>Ngày hoàn thành DK</th><th>Hành động</th>
+            <th>Mã GT</th><th>Tên gói thầu</th><th>Loại GT</th>
+            <th>Hình thức LCNT</th><th>Giá gói thầu</th><th>Trạng thái</th><th>Hành động</th>
           </tr></thead>
           <tbody id="const-tbody"><tr><td colspan="7" style="text-align:center">Đang tải...</td></tr></tbody>
         </table>
@@ -92,20 +92,29 @@ async function loadConstructions() {
       return;
     }
 
-    tbody.innerHTML = list.map(c => `
+    const STATUS_GT = {
+      'Đang thực hiện': 'background:#d1fae5;color:#065f46',
+      'Hoàn thành':     'background:#dbeafe;color:#1e40af',
+      'Tạm ngưng':      'background:#fef3c7;color:#92400e',
+      'Chưa triển khai':'background:#e5e7eb;color:#374151',
+    };
+    tbody.innerHTML = list.map(c => {
+      const stStyle = STATUS_GT[c.status] || 'background:#e5e7eb;color:#374151';
+      const stLabel = c.status || '—';
+      return `
       <tr>
         <td><strong>${esc(c.construction_code) || '—'}</strong></td>
         <td>${esc(c.name)}</td>
-        <td>${esc(c.construction_type)}</td>
-        <td>Cấp ${esc(c.construction_grade)}</td>
-        <td>${fmtDate(c.start_date)}</td>
-        <td>${fmtDate(c.expected_end_date)}</td>
+        <td>${esc(c.construction_type) || '—'}</td>
+        <td>${esc(c.technical_specs) || '—'}</td>
+        <td style="text-align:right">${esc(c.contract_value) || '—'}</td>
+        <td><span style="padding:2px 8px;border-radius:12px;font-size:12px;${stStyle}">${esc(stLabel)}</span></td>
         <td>
           <button class="btn btn-secondary btn-sm" onclick="viewDossiers('${esc(c.id)}','${esc(c.name)}')">📁 Hồ sơ</button>
           <button class="btn btn-secondary btn-sm" onclick="viewContracts('${esc(c.id)}','${esc(c.name)}')">📄 HĐ</button>
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="alert alert-danger">${err.message}</div></td></tr>`;
   }

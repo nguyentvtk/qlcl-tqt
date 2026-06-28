@@ -81,11 +81,14 @@ class ConstructionCreate(BaseModel):
     project_id: str
     name: str
     construction_code: Optional[str] = None
-    construction_type: str
-    construction_grade: Literal["I", "II", "III", "IV", "V"]
-    technical_specs: Optional[str] = None
+    construction_type: Optional[str] = None
+    construction_grade: Optional[Literal["I", "II", "III", "IV", "V"]] = None
+    technical_specs: Optional[str] = None   # Dùng cho Hình thức LCNT
     start_date: Optional[str] = None
     expected_end_date: Optional[str] = None
+    # Mở rộng từ sheet "Gói thầu"
+    status: Optional[str] = None            # Trạng thái GT
+    contract_value: Optional[str] = None    # Giá gói thầu
 
 
 class Construction(ConstructionCreate):
@@ -110,13 +113,22 @@ class Participant(ParticipantCreate):
 
 # ─── Construction Dossiers ────────────────────────────────────────
 class DossierCreate(BaseModel):
-    construction_id: str
-    template_id: str
+    construction_id: Optional[str] = None
+    template_id: Optional[str] = None
     document_name: str
     document_number: Optional[str] = None
     sign_date: Optional[str] = None
-    file_path: str
-    format_type: Literal["ORIGINAL_PAPER", "SCAN_PDF", "DIGITAL_SIGNED"]
+    file_path: Optional[str] = None
+    format_type: Optional[Literal["ORIGINAL_PAPER", "SCAN_PDF", "DIGITAL_SIGNED"]] = None
+    # Mở rộng từ sheet "Nghiệm thu"
+    project_code: Optional[str] = None         # Mã DA
+    contract_id: Optional[str] = None          # Mã HĐ
+    acceptance_round: Optional[str] = None     # Lần NT
+    request_date: Optional[str] = None         # Ngày đề nghị
+    payment_amount: Optional[str] = None       # Giá trị NT
+    payment_pct: Optional[str] = None          # % Giá trị NT
+    project_name: Optional[str] = None         # Tên DA
+    contractor_name: Optional[str] = None      # Nhà thầu
 
 
 class Dossier(DossierCreate):
@@ -149,14 +161,24 @@ class Signature(SignatureCreate):
 
 # ─── Contracts ───────────────────────────────────────────────────
 class ContractCreate(BaseModel):
-    construction_id: str
+    construction_id: Optional[str] = None
     contract_number: str
-    sign_date: str
-    contract_value_vnd: float
+    sign_date: Optional[str] = None
+    contract_value_vnd: Optional[float] = None
     advance_percentage: Optional[float] = None
     retention_percentage: float = 0
     retention_account_number: Optional[str] = None
     mau_02a_url: Optional[str] = None
+    # Mở rộng từ sheet "Hợp đồng"
+    project_code: Optional[str] = None         # Mã DA
+    bid_package_code: Optional[str] = None     # Mã GT
+    contract_name: Optional[str] = None        # Tên HĐ
+    contract_type: Optional[str] = None        # Loại HĐ
+    contractor_name: Optional[str] = None      # Nhà thầu
+    settlement_value: Optional[float] = None   # Giá quyết toán
+    duration_days: Optional[str] = None        # Thời gian HĐ
+    effective_date: Optional[str] = None       # Ngày hiệu lực
+    expiry_date: Optional[str] = None          # Ngày hết hạn
 
 
 class Contract(ContractCreate):
@@ -215,9 +237,9 @@ class Warning(WarningCreate):
 # ─── Project Settlements ──────────────────────────────────────────
 class SettlementCreate(BaseModel):
     project_id: str
-    proposed_settlement_amount: float
-    approver_org_id: str
-    verifier_org_id: str
+    proposed_settlement_amount: float = 0
+    approver_org_id: Optional[str] = None
+    verifier_org_id: Optional[str] = None
     submission_deadline: Optional[str] = None
 
 

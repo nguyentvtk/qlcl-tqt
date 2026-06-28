@@ -37,21 +37,85 @@ async def list_groups(_: dict = Depends(get_current_user)):
     return sm.read_all("dossier_groups")
 
 
+# ─── Helpers: Nghiệm thu ─────────────────────────────────────────
+def _map_nghiem_thu_row(r: dict) -> Dossier | None:
+    """Chuyển hàng sheet 'Nghiệm thu' sang Dossier model."""
+    ma_hsnt = str(r.get("Mã HSNT", "")).strip()
+    ma_hd   = str(r.get("Mã HĐ", "")).strip()
+    ma_da   = str(r.get("Mã DA", "")).strip()
+    ten_da  = str(r.get("Tên DA", "")).strip()
+    if not ma_hsnt:
+        return None
+    status_map = {
+        "Đã thanh toán": "APPROVED",
+        "Chờ nghiệm thu": "PENDING",
+        "Đang xử lý": "PENDING",
+    }
+    raw_status = str(r.get("Trạng thái HSNT", "")).strip()
+    return Dossier(
+        id=ma_hsnt,
+        document_number=ma_hsnt,
+        document_name=f"Hồ sơ NT lần {r.get('Lần NT','1')} – {ten_da}",
+        project_code=ma_da,
+        contract_id=ma_hd.strip(),
+        construction_id=ma_da,
+        template_id="NT",
+        acceptance_round=str(r.get("Lần NT", "")),
+        request_date=str(r.get("Ngày đề nghị", "")),
+        sign_date=str(r.get("Ngày NT", "")),
+        payment_amount=str(r.get("Giá trị NT", "")),
+        payment_pct=str(r.get("% Giá trị NT", "")),
+        project_name=ten_da,
+        contractor_name=str(r.get("Nhà thầu", "")),
+        file_path="",
+        format_type="SCAN_PDF",
+        status=status_map.get(raw_status, raw_status or "PENDING"),
+    )
+
+
 # ─── Construction Dossiers ────────────────────────────────────────
 @router.get("", response_model=list[Dossier])
 async def list_dossiers(
     construction_id: Optional[str] = None,
+    project_code: Optional[str] = None,
     status: Optional[str] = None,
     _: dict = Depends(get_current_user)
 ):
+    # 1. Sheet "Nghiệm thu"
+    result: list[Dossier] = []
+    seen_ids: set[str] = set()
+    for row in sm.read_sheet_by_name_raw("Nghiệm thu"):
+        ma_da = str(row.get("Mã DA", "")).strip()
+        # Sheet "Nghiệm thu" không có Mã GT → không thể lọc theo construction_id composite
+        # Chỉ hiển thị khi top-level view (không có construction_id filter)
+        if construction_id:
+            continue
+        if project_code and ma_da != project_code:
+            continue
+        d = _map_nghiem_thu_row(row)
+        if d:
+            if status and d.status != status:
+                continue
+            if d.id not in seen_ids:
+                result.append(d)
+                seen_ids.add(d.id)
+
+    # 2. App-created dossiers
     filters = {}
     if construction_id:
         filters["construction_id"] = construction_id
     if status:
         filters["status"] = status
+    for r in (sm.read_where("construction_dossiers", **filters) if filters else sm.read_all("construction_dossiers")):
+        try:
+            d = Dossier(**r)
+            if d.id not in seen_ids:
+                result.append(d)
+                seen_ids.add(d.id)
+        except Exception:
+            pass
 
-    records = sm.read_where("construction_dossiers", **filters) if filters else sm.read_all("construction_dossiers")
-    return [Dossier(**r) for r in records]
+    return result
 
 
 @router.get("/{dossier_id}", response_model=Dossier)

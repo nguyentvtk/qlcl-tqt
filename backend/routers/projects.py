@@ -86,11 +86,52 @@ async def update_project(project_id: str, body: ProjectCreate, _: dict = Depends
     return Project(**updated)
 
 
+# ─── Helpers: Gói thầu ─────────────────────────────────────────────
+def _map_goi_thau_row(r: dict) -> Construction | None:
+    """Chuyển hàng sheet 'Gói thầu' sang Construction model."""
+    ma_gt  = str(r.get("Mã GT", "")).strip()
+    ma_da  = str(r.get("Mã DA", "")).strip()
+    ten_gt = str(r.get("Tên gói thầu", "")).strip()
+    if not (ma_da and ten_gt):
+        return None
+    return Construction(
+        id=f"{ma_da}_{ma_gt}",
+        project_id=ma_da,
+        construction_code=ma_gt,
+        name=ten_gt,
+        construction_type=str(r.get("Loại GT", "")),
+        construction_grade=None,
+        technical_specs=str(r.get("Hình thức LCNT", "")),
+        status=str(r.get("Trạng thái GT", "")),
+        contract_value=str(r.get("Giá gói thầu", "")),
+    )
+
+
 # ─── Constructions ─────────────────────────────────────────────────
 @router.get("/{project_id}/constructions", response_model=list[Construction])
 async def list_constructions(project_id: str, _: dict = Depends(get_current_user)):
-    records = sm.read_where("constructions", project_id=project_id)
-    return [Construction(**r) for r in records]
+    # 1. Đọc từ sheet "Gói thầu"
+    result: list[Construction] = []
+    seen_ids: set[str] = set()
+    for row in sm.read_sheet_by_name_raw("Gói thầu"):
+        if str(row.get("Mã DA", "")).strip() != project_id:
+            continue
+        c = _map_goi_thau_row(row)
+        if c and c.id not in seen_ids:
+            result.append(c)
+            seen_ids.add(c.id)
+
+    # 2. Bổ sung từ sheet "constructions" (app-created)
+    for r in sm.read_where("constructions", project_id=project_id):
+        try:
+            c = Construction(**r)
+            if c.id not in seen_ids:
+                result.append(c)
+                seen_ids.add(c.id)
+        except Exception:
+            pass
+
+    return result
 
 
 @router.post("/{project_id}/constructions", response_model=Construction, status_code=201)
