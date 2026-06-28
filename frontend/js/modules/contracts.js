@@ -225,8 +225,17 @@ async function loadContracts() {
     // Populate contract filter
     const sel = document.getElementById('payment-contract-filter');
     const pmSel = document.getElementById('pm-contract');
-    if (sel) sel.innerHTML = `<option value="">-- Chọn hợp đồng --</option>` + buildOptions(_contractList, 'id', 'contract_number');
-    if (pmSel) pmSel.innerHTML = `<option value="">-- Chọn hợp đồng --</option>` + buildOptions(_contractList, 'id', 'contract_number');
+    const contractOpts = `<option value="">-- Chọn hợp đồng --</option>` +
+      _contractList.map(c => {
+        const label = [
+          c.contract_number,
+          c.contract_name ? `– ${c.contract_name}` : '',
+          c.project_code  ? `(${c.project_code})` : '',
+        ].filter(Boolean).join(' ');
+        return `<option value="${esc(c.id)}">${esc(label)}</option>`;
+      }).join('');
+    if (sel) sel.innerHTML = contractOpts;
+    if (pmSel) pmSel.innerHTML = contractOpts;
   } catch (err) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="alert alert-danger">${err.message}</div></td></tr>`;
   }

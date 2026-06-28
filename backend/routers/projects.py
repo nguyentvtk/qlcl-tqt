@@ -107,6 +107,28 @@ def _map_goi_thau_row(r: dict) -> Construction | None:
     )
 
 
+# ─── All constructions (không filter theo project) ──────────────────
+@router.get("/constructions/all", response_model=list[Construction])
+async def list_all_constructions(_: dict = Depends(get_current_user)):
+    """Lấy toàn bộ gói thầu từ sheet 'Gói thầu' (không filter dự án)."""
+    result: list[Construction] = []
+    seen_ids: set[str] = set()
+    for row in sm.read_sheet_by_name_raw("Gói thầu"):
+        c = _map_goi_thau_row(row)
+        if c and c.id not in seen_ids:
+            result.append(c)
+            seen_ids.add(c.id)
+    for r in sm.read_all("constructions"):
+        try:
+            c = Construction(**r)
+            if c.id not in seen_ids:
+                result.append(c)
+                seen_ids.add(c.id)
+        except Exception:
+            pass
+    return result
+
+
 # ─── Constructions ─────────────────────────────────────────────────
 @router.get("/{project_id}/constructions", response_model=list[Construction])
 async def list_constructions(project_id: str, _: dict = Depends(get_current_user)):

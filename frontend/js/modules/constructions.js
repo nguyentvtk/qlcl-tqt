@@ -14,8 +14,8 @@ export async function renderConstructions(container) {
       <div class="table-wrapper">
         <table>
           <thead><tr>
-            <th>Mã GT</th><th>Tên gói thầu</th><th>Loại GT</th>
-            <th>Hình thức LCNT</th><th>Giá gói thầu</th><th>Trạng thái</th><th>Hành động</th>
+            <th>Mã GT</th><th>Tên gói thầu</th><th>Mã DA</th>
+            <th>Loại GT</th><th>Giá gói thầu</th><th>Trạng thái</th><th>Hành động</th>
           </tr></thead>
           <tbody id="const-tbody"><tr><td colspan="7" style="text-align:center">Đang tải...</td></tr></tbody>
         </table>
@@ -85,7 +85,7 @@ async function loadConstructions() {
   try {
     const list = proj.id
       ? await projects.listConstructions(proj.id)
-      : [];
+      : await projects.listAllConstructions();
 
     if (!list.length) {
       tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">🏛️</div><p>Chưa có gói thầu nào${proj.id ? ' cho dự án này' : ''}</p></div></td></tr>`;
@@ -105,8 +105,8 @@ async function loadConstructions() {
       <tr>
         <td><strong>${esc(c.construction_code) || '—'}</strong></td>
         <td>${esc(c.name)}</td>
+        <td><span style="font-size:12px;color:#6b7280">${esc(c.project_id) || '—'}</span></td>
         <td>${esc(c.construction_type) || '—'}</td>
-        <td>${esc(c.technical_specs) || '—'}</td>
         <td style="text-align:right">${esc(c.contract_value) || '—'}</td>
         <td><span style="padding:2px 8px;border-radius:12px;font-size:12px;${stStyle}">${esc(stLabel)}</span></td>
         <td>

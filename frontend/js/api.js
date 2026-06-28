@@ -74,6 +74,7 @@ export const projects = {
   update: (id, data) => put(`/api/v1/projects/${id}`, data),
 
   listConstructions: (pid) => get(`/api/v1/projects/${pid}/constructions`),
+  listAllConstructions: () => get('/api/v1/projects/constructions/all'),
   createConstruction: (pid, data) => post(`/api/v1/projects/${pid}/constructions`, data),
   getConstruction: (cid) => get(`/api/v1/projects/constructions/${cid}`),
 
