@@ -130,6 +130,53 @@ def upload_file(file_bytes: bytes, filename: str, mime_type: str,
     return uploaded
 
 
+def diagnose() -> dict:
+    """
+    Kiểm tra từng bước kết nối Drive để chẩn đoán lỗi cấu hình:
+    1. Đọc credentials + email service account
+    2. Truy cập thư mục gốc GOOGLE_DRIVE_FOLDER_ID
+    3. Tạo thử + xoá một thư mục con
+    Trả về dict kết quả từng bước (không raise).
+    """
+    import json
+    result = {
+        "root_folder_id": config.GOOGLE_DRIVE_FOLDER_ID or "(TRỐNG — kiểm tra env GOOGLE_DRIVE_FOLDER_ID trên Vercel)",
+        "credentials": "?", "service_account": "?",
+        "access_root": "?", "create_folder": "?",
+    }
+
+    # 1. Credentials
+    try:
+        with open(config.GOOGLE_CREDENTIALS_FILE, encoding="utf-8") as f:
+            result["service_account"] = json.load(f).get("client_email", "?")
+        result["credentials"] = "OK"
+    except Exception as e:
+        result["credentials"] = f"LỖI: {e}"
+        return result
+
+    # 2. Truy cập thư mục gốc
+    try:
+        info = _service().files().get(
+            fileId=config.GOOGLE_DRIVE_FOLDER_ID,
+            fields="id,name,mimeType", supportsAllDrives=True,
+        ).execute()
+        result["access_root"] = f"OK — thấy thư mục '{info.get('name')}'"
+    except Exception as e:
+        result["access_root"] = f"LỖI: {e}"
+        return result
+
+    # 3. Tạo + xoá thư mục thử nghiệm
+    try:
+        fid = get_or_create_folder("__kiem_tra_ket_noi__", config.GOOGLE_DRIVE_FOLDER_ID)
+        _service().files().delete(fileId=fid, supportsAllDrives=True).execute()
+        _folder_cache.pop(f"{config.GOOGLE_DRIVE_FOLDER_ID}/__kiem_tra_ket_noi__", None)
+        result["create_folder"] = "OK — tạo/xoá thư mục con thành công"
+    except Exception as e:
+        result["create_folder"] = f"LỖI: {e}"
+
+    return result
+
+
 def delete_file(file_id: str) -> None:
     """Delete a Drive file by ID (soft cleanup, does not raise on failure)."""
     try:

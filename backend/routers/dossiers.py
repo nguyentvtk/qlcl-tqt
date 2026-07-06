@@ -86,7 +86,9 @@ def _resolve_drive_folder(construction_id: str, phase: str, submission_round: st
             _bid_package_folder_name(ma_da, ma_gt),
             f"Lan {lan}",
         ])
-    except Exception:
+    except Exception as e:
+        # In lỗi ra log (Vercel → Deployments → Functions) thay vì nuốt lặng lẽ
+        print(f"⚠️ [Drive] Không tạo được cây thư mục cho '{construction_id}': {type(e).__name__}: {e}")
         return None  # fallback: upload vào thư mục gốc
 
 
@@ -103,6 +105,12 @@ async def list_templates(_: dict = Depends(get_current_user)):
 @router.get("/groups")
 async def list_groups(_: dict = Depends(get_current_user)):
     return sm.read_all("dossier_groups")
+
+
+@router.get("/drive-check")
+async def drive_check(_: dict = Depends(get_current_user)):
+    """Chẩn đoán kết nối Google Drive (credentials, quyền thư mục gốc, tạo thư mục)."""
+    return drive_service.diagnose()
 
 
 # ─── Helpers: Nghiệm thu ─────────────────────────────────────────
