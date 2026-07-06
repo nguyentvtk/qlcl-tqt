@@ -1,54 +1,27 @@
-import { organizations } from '../api.js';
+import { organizations, CPM_URL } from '../api.js';
 import { esc, fmtDate, toast } from '../utils.js';
+
+// Nhà thầu là master data do CPM5.0 quản lý (tab "Nhà thầu" trong Google Sheets chung).
+// WA chỉ hiển thị — thêm/sửa thực hiện trong CPM5.0.
 
 export async function renderOrganizations(container) {
   container.innerHTML = `
     <div class="card">
       <div class="card-title">🏢 Danh sách Nhà thầu
-        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openOrgModal()">+ Thêm nhà thầu</button>
+        <a class="btn btn-primary btn-sm" style="margin-left:auto" target="_blank"
+           href="${CPM_URL}/?page=contractors" title="Nhà thầu do CPM5.0 quản lý">✏️ Quản lý trong CPM5.0 ↗</a>
+      </div>
+      <div class="alert alert-info" style="margin-bottom:12px;font-size:12px">
+        Danh sách nhà thầu đồng bộ từ <strong>CPM5.0</strong> (dùng chung Google Sheets).
+        Thêm/sửa nhà thầu trong CPM5.0.
       </div>
       <div class="table-wrapper">
         <table>
           <thead><tr>
-            <th>Tên nhà thầu</th><th>Mã số thuế</th><th>Địa chỉ</th>
-            <th>Đại diện</th><th>Hành động</th>
+            <th>Tên nhà thầu</th><th>Mã số thuế</th><th>Địa chỉ</th><th>Đại diện</th>
           </tr></thead>
-          <tbody id="org-tbody"><tr><td colspan="5" style="text-align:center">Đang tải...</td></tr></tbody>
+          <tbody id="org-tbody"><tr><td colspan="4" style="text-align:center">Đang tải...</td></tr></tbody>
         </table>
-      </div>
-    </div>
-
-    <div class="modal-overlay hidden" id="org-modal">
-      <div class="modal">
-        <div class="modal-header">
-          <h3 id="org-modal-title">Thêm tổ chức</h3>
-          <button class="modal-close" onclick="closeModal('org-modal')">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group" style="grid-column:1/-1">
-              <label>Tên tổ chức *</label>
-              <input id="org-name" type="text" placeholder="Tên đầy đủ của tổ chức..." />
-            </div>
-            <div class="form-group">
-              <label>Mã số thuế</label>
-              <input id="org-tax" type="text" placeholder="0123456789" />
-            </div>
-            <div class="form-group">
-              <label>Điện thoại</label>
-              <input id="org-phone" type="text" placeholder="0901234567" />
-            </div>
-            <div class="form-group" style="grid-column:1/-1">
-              <label>Địa chỉ</label>
-              <textarea id="org-address" placeholder="Địa chỉ trụ sở..."></textarea>
-            </div>
-          </div>
-          <div id="org-modal-err" class="alert alert-danger" style="display:none;margin-top:12px"></div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeModal('org-modal')">Hủy</button>
-          <button class="btn btn-primary" onclick="saveOrg()">Lưu</button>
-        </div>
       </div>
     </div>`;
 
@@ -60,7 +33,7 @@ async function loadOrgs() {
   try {
     const list = await organizations.list();
     if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">🏢</div><p>Chưa có nhà thầu nào</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><div class="icon">🏢</div><p>Chưa có nhà thầu nào — thêm trong CPM5.0</p></div></td></tr>`;
     } else {
       tbody.innerHTML = list.map(o => `
         <tr>
@@ -68,71 +41,10 @@ async function loadOrgs() {
           <td>${esc(o.tax_code) || '—'}</td>
           <td>${esc(o.address) || '—'}</td>
           <td>${esc(o.phone) || '—'}</td>
-          <td>
-            <button class="btn btn-secondary btn-sm" onclick="editOrg('${esc(o.id)}')">✏️ Sửa</button>
-          </td>
         </tr>
       `).join('');
     }
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="alert alert-danger">${err.message}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4"><div class="alert alert-danger">${err.message}</div></td></tr>`;
   }
 }
-
-window.openOrgModal = function(id = null) {
-  document.getElementById('org-modal').classList.remove('hidden');
-  document.getElementById('org-modal-title').textContent = id ? 'Sửa tổ chức' : 'Thêm tổ chức';
-  document.getElementById('org-modal-err').style.display = 'none';
-  if (!id) {
-    ['org-name','org-tax','org-phone','org-address'].forEach(i => document.getElementById(i).value = '');
-    document.getElementById('org-modal').dataset.editId = '';
-  }
-};
-
-window.editOrg = async function(id) {
-  try {
-    const o = await organizations.get(id);
-    document.getElementById('org-name').value = o.name;
-    document.getElementById('org-tax').value = o.tax_code || '';
-    document.getElementById('org-phone').value = o.phone || '';
-    document.getElementById('org-address').value = o.address || '';
-    document.getElementById('org-modal').dataset.editId = id;
-    openOrgModal(id);
-  } catch (err) {
-    toast(err.message, 'error');
-  }
-};
-
-window.saveOrg = async function() {
-  const errEl = document.getElementById('org-modal-err');
-  errEl.style.display = 'none';
-  const editId = document.getElementById('org-modal').dataset.editId;
-
-  const data = {
-    name: document.getElementById('org-name').value.trim(),
-    tax_code: document.getElementById('org-tax').value.trim() || null,
-    phone: document.getElementById('org-phone').value.trim() || null,
-    address: document.getElementById('org-address').value.trim() || null,
-  };
-
-  if (!data.name) {
-    errEl.textContent = 'Tên tổ chức không được trống';
-    errEl.style.display = 'block';
-    return;
-  }
-
-  try {
-    if (editId) {
-      await organizations.update(editId, data);
-      toast('Cập nhật tổ chức thành công');
-    } else {
-      await organizations.create(data);
-      toast('Thêm tổ chức thành công');
-    }
-    closeModal('org-modal');
-    await loadOrgs();
-  } catch (err) {
-    errEl.textContent = err.message;
-    errEl.style.display = 'block';
-  }
-};

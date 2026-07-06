@@ -1,5 +1,7 @@
-import { contracts } from '../api.js';
+import { contracts, cpm, CPM_URL } from '../api.js';
 import { esc, fmt, fmtDate, fmtDateTime, badge, toast, slaStatus, buildOptions } from '../utils.js';
+
+// Hợp đồng là master data do CPM5.0 quản lý — WA hiển thị + xử lý Thanh toán/SLA (đặc thù WA).
 
 export async function renderContracts(container) {
   const construction = window._currentConstruction || {};
@@ -16,7 +18,12 @@ export async function renderContracts(container) {
     <div id="tab-contracts" class="page-section active">
       <div class="card">
         <div class="card-title">📄 Danh sách hợp đồng
-          <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openContractModal()">+ Thêm HĐ</button>
+          <a class="btn btn-primary btn-sm" style="margin-left:auto" target="_blank"
+             href="${CPM_URL}/?page=contracts" title="Hợp đồng do CPM5.0 quản lý">✏️ Quản lý trong CPM5.0 ↗</a>
+        </div>
+        <div class="alert alert-info" style="margin-bottom:12px;font-size:12px">
+          Hợp đồng đồng bộ từ <strong>CPM5.0</strong>. Thêm/sửa hợp đồng trong CPM5.0 —
+          tại đây xử lý <strong>Thanh toán, SLA KBNN</strong> và xem <strong>Phụ lục HĐ</strong>.
         </div>
         <div class="table-wrapper">
           <table>
@@ -150,45 +157,17 @@ export async function renderContracts(container) {
       </div>
     </div>
 
-    <!-- Modal: Thêm HĐ -->
-    <div class="modal-overlay hidden" id="contract-modal">
-      <div class="modal">
+    <!-- Modal: Phụ lục HĐ (dữ liệu CPM5.0) -->
+    <div class="modal-overlay hidden" id="appendix-modal">
+      <div class="modal" style="max-width:760px;width:95%">
         <div class="modal-header">
-          <h3>Thêm hợp đồng</h3>
-          <button class="modal-close" onclick="closeModal('contract-modal')">✕</button>
+          <h3>📑 Phụ lục hợp đồng <span id="appendix-title" style="font-weight:400;font-size:13px;color:#6b7280"></span></h3>
+          <button class="modal-close" onclick="closeModal('appendix-modal')">✕</button>
         </div>
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Số hợp đồng *</label>
-              <input id="ct-number" type="text" placeholder="VD: HĐ-TC-001/2026" />
-            </div>
-            <div class="form-group">
-              <label>Ngày ký *</label>
-              <input id="ct-sign" type="date" />
-            </div>
-            <div class="form-group">
-              <label>Giá trị HĐ (VNĐ) *</label>
-              <input id="ct-value" type="number" placeholder="0" />
-            </div>
-            <div class="form-group">
-              <label>Tỷ lệ tạm ứng (%)</label>
-              <input id="ct-advance-pct" type="number" placeholder="30" min="0" max="100" />
-            </div>
-            <div class="form-group">
-              <label>Tỷ lệ giảm trừ bảo hành (%)</label>
-              <input id="ct-retention-pct" type="number" placeholder="5" min="0" max="100" />
-            </div>
-            <div class="form-group">
-              <label>Số tài khoản bảo hành</label>
-              <input id="ct-retention-acc" type="text" placeholder="..." />
-            </div>
-          </div>
-          <div id="contract-modal-err" class="alert alert-danger" style="display:none;margin-top:12px"></div>
-        </div>
+        <div class="modal-body" id="appendix-body" style="max-height:65vh;overflow-y:auto">Đang tải...</div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeModal('contract-modal')">Hủy</button>
-          <button class="btn btn-primary" onclick="saveContract()">Lưu</button>
+          <a class="btn btn-primary" target="_blank" href="${CPM_URL}/?page=contracts">✏️ Quản lý trong CPM5.0 ↗</a>
+          <button class="btn btn-secondary" onclick="closeModal('appendix-modal')">Đóng</button>
         </div>
       </div>
     </div>`;
@@ -215,8 +194,9 @@ async function loadContracts() {
           <td class="currency">${fmt(c.contract_value_vnd)}</td>
           <td class="currency">${c.total_paid_volume_vnd ? fmt(c.total_paid_volume_vnd) : '—'}</td>
           <td>${badge(c.contract_status || 'ACTIVE')}</td>
-          <td>
+          <td style="white-space:nowrap">
             <button class="btn btn-secondary btn-sm" onclick="window._paymentContractId='${esc(c.id)}';switchContractTab('payments',document.querySelectorAll('.tab')[1]);loadPaymentsForContract('${esc(c.id)}')">💰 TT</button>
+            <button class="btn btn-secondary btn-sm" onclick="viewAppendices('${esc(c.contract_number)}','${esc(c.contract_name || '')}')">📑 Phụ lục</button>
           </td>
         </tr>
       `).join('');
@@ -308,44 +288,40 @@ async function loadSlaList() {
   }
 }
 
-window.openContractModal = function() {
-  document.getElementById('contract-modal').classList.remove('hidden');
-  ['ct-number','ct-sign','ct-value','ct-advance-pct','ct-retention-pct','ct-retention-acc'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  document.getElementById('contract-modal-err').style.display = 'none';
-};
-
-window.saveContract = async function() {
-  const errEl = document.getElementById('contract-modal-err');
-  errEl.style.display = 'none';
-  const construction = window._currentConstruction || {};
-
-  const data = {
-    construction_id: construction.id || '',
-    contract_number: document.getElementById('ct-number').value.trim(),
-    sign_date: document.getElementById('ct-sign').value,
-    contract_value_vnd: parseFloat(document.getElementById('ct-value').value) || 0,
-    advance_percentage: parseFloat(document.getElementById('ct-advance-pct').value) || 0,
-    retention_percentage: parseFloat(document.getElementById('ct-retention-pct').value) || 0,
-    retention_account_number: document.getElementById('ct-retention-acc').value.trim(),
-  };
-
-  if (!data.contract_number || !data.sign_date || !data.contract_value_vnd) {
-    errEl.textContent = 'Vui lòng điền đầy đủ thông tin bắt buộc';
-    errEl.style.display = 'block';
-    return;
-  }
+// ─── Phụ lục HĐ (dữ liệu từ CPM5.0) ──────────────────────────────
+window.viewAppendices = async function(contractNumber, contractName) {
+  document.getElementById('appendix-modal').classList.remove('hidden');
+  document.getElementById('appendix-title').textContent = `— ${contractNumber}${contractName ? ' · ' + contractName : ''}`;
+  const body = document.getElementById('appendix-body');
+  body.innerHTML = '<div style="text-align:center;padding:24px;color:#6b7280">⏳ Đang tải phụ lục từ CPM5.0...</div>';
 
   try {
-    await contracts.create(data);
-    toast('Thêm hợp đồng thành công');
-    closeModal('contract-modal');
-    await loadContracts();
+    const list = await cpm.appendices(contractNumber);
+    if (!list.length) {
+      body.innerHTML = `<div class="empty-state"><div class="icon">📑</div><p>Hợp đồng chưa có phụ lục nào trong CPM5.0</p></div>`;
+      return;
+    }
+    const totalValue = list.reduce((s, a) => s + (a.value || 0), 0);
+    body.innerHTML = `
+      <div style="font-size:13px;margin-bottom:10px">
+        Tổng <strong>${list.length}</strong> phụ lục — giá trị điều chỉnh:
+        <strong style="color:${totalValue >= 0 ? 'var(--success)' : 'var(--danger)'}">${fmt(totalValue)}</strong>
+      </div>
+      <div class="table-wrapper"><table>
+        <thead><tr><th>Mã PLHĐ</th><th>Nội dung</th><th>Ngày ký</th><th>Giá trị (VNĐ)</th><th>Gia hạn</th><th>File</th></tr></thead>
+        <tbody>${list.map(a => `
+          <tr>
+            <td><strong>${esc(a.id)}</strong></td>
+            <td style="font-size:12px">${esc(a.content) || '—'}</td>
+            <td style="font-size:12px">${fmtDate(a.sign_date)}</td>
+            <td class="currency">${a.value ? fmt(a.value) : '—'}</td>
+            <td style="font-size:12px">${a.extension_days ? esc(a.extension_days) + ' ngày' : '—'}</td>
+            <td>${a.file_url ? `<a href="${esc(a.file_url)}" target="_blank" class="btn btn-secondary btn-sm">📎</a>` : '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>`;
   } catch (err) {
-    errEl.textContent = err.message;
-    errEl.style.display = 'block';
+    body.innerHTML = `<div class="alert alert-danger">Không tải được phụ lục: ${esc(err.message)}</div>`;
   }
 };
 

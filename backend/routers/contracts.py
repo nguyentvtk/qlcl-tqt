@@ -19,6 +19,19 @@ import sheets_manager as sm
 
 router = APIRouter(prefix="/api/v1/contracts", tags=["Hợp đồng & Thanh toán"])
 
+# Trường số của Contract / PaymentRequest — dùng cho sm.clean_numbers
+_CONTRACT_NONE_FIELDS = ("contract_value_vnd", "advance_percentage", "settlement_value")
+_CONTRACT_ZERO_FIELDS = ("retention_percentage", "total_advanced_vnd", "total_paid_volume_vnd")
+_PAYMENT_ZERO_FIELDS = ("proposed_payment_vnd", "proposed_advance_recovery_vnd")
+
+
+def _parse_contract(r: dict) -> Contract:
+    return Contract(**sm.clean_numbers(r, _CONTRACT_NONE_FIELDS, _CONTRACT_ZERO_FIELDS))
+
+
+def _parse_payment(r: dict) -> PaymentRequest:
+    return PaymentRequest(**sm.clean_numbers(r, (), _PAYMENT_ZERO_FIELDS))
+
 
 # ─── Helpers: Hợp đồng ──────────────────────────────────────────────
 def _map_hop_dong_row(r: dict) -> Contract | None:
@@ -76,7 +89,7 @@ async def list_contracts(
     app_records = sm.read_where("contracts", construction_id=construction_id) if construction_id else sm.read_all("contracts")
     for r in app_records:
         try:
-            c = Contract(**r)
+            c = _parse_contract(r)
             if c.id not in seen_ids:
                 result.append(c)
                 seen_ids.add(c.id)
@@ -91,7 +104,7 @@ async def get_contract(contract_id: str, _: dict = Depends(get_current_user)):
     r = sm.read_by_id("contracts", contract_id)
     if not r:
         raise HTTPException(404, "Không tìm thấy hợp đồng")
-    return Contract(**r)
+    return _parse_contract(r)
 
 
 @router.post("", response_model=Contract, status_code=201)
@@ -115,7 +128,13 @@ async def update_contract(contract_id: str, body: ContractCreate, _: dict = Depe
 @router.get("/{contract_id}/payments", response_model=list[PaymentRequest])
 async def list_payments(contract_id: str, _: dict = Depends(get_current_user)):
     records = sm.read_where("payment_requests", contract_id=contract_id)
-    return [PaymentRequest(**r) for r in records]
+    result = []
+    for r in records:
+        try:
+            result.append(_parse_payment(r))
+        except Exception:
+            pass
+    return result
 
 
 @router.post("/{contract_id}/payments", response_model=PaymentRequest, status_code=201)
@@ -141,7 +160,7 @@ async def create_payment(
     data["treasury_status"] = "NOT_SENT"
 
     record = sm.insert("payment_requests", data)
-    return PaymentRequest(**record)
+    return _parse_payment(record)
 
 
 @router.put("/{contract_id}/payments/{payment_id}/submit")

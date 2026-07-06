@@ -1,5 +1,7 @@
-import { projects } from '../api.js';
+import { projects, CPM_URL } from '../api.js';
 import { esc, fmtDate, badge, toast, buildOptions } from '../utils.js';
+
+// Gói thầu là master data do CPM5.0 quản lý — WA chỉ hiển thị.
 
 export async function renderConstructions(container) {
   const proj = window._currentProject || {};
@@ -9,7 +11,11 @@ export async function renderConstructions(container) {
     ${proj.id ? `<div class="breadcrumb"><a href="#" onclick="navigate('projects')">Dự án</a> › <strong>${esc(proj.name)}</strong></div>` : ''}
     <div class="card">
       <div class="card-title">🏛️ ${title}
-        <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openConstModal()">+ Thêm gói thầu</button>
+        <a class="btn btn-primary btn-sm" style="margin-left:auto" target="_blank"
+           href="${CPM_URL}/?page=projects" title="Gói thầu do CPM5.0 quản lý">✏️ Quản lý trong CPM5.0 ↗</a>
+      </div>
+      <div class="alert alert-info" style="margin-bottom:12px;font-size:12px">
+        Gói thầu đồng bộ từ <strong>CPM5.0</strong> (dùng chung Google Sheets). Thêm/sửa gói thầu trong CPM5.0.
       </div>
       <div class="table-wrapper">
         <table>
@@ -22,59 +28,7 @@ export async function renderConstructions(container) {
       </div>
     </div>
 
-    <!-- Modal -->
-    <div class="modal-overlay hidden" id="const-modal">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Thêm gói thầu</h3>
-          <button class="modal-close" onclick="closeModal('const-modal')">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group" style="grid-column:1/-1">
-              <label>Tên hạng mục *</label>
-              <input id="c-name" type="text" placeholder="Tên hạng mục công trình..." />
-            </div>
-            <div class="form-group">
-              <label>Mã gói thầu</label>
-              <input id="c-code" type="text" placeholder="VD: GT-001" />
-            </div>
-            <div class="form-group">
-              <label>Loại công trình *</label>
-              <input id="c-type" type="text" placeholder="VD: Dân dụng, Giao thông..." />
-            </div>
-            <div class="form-group">
-              <label>Cấp công trình *</label>
-              <select id="c-grade">
-                <option value="">-- Chọn cấp --</option>
-                <option value="I">Cấp I</option>
-                <option value="II">Cấp II</option>
-                <option value="III">Cấp III</option>
-                <option value="IV">Cấp IV</option>
-                <option value="V">Cấp V</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Ngày khởi công</label>
-              <input id="c-start" type="date" />
-            </div>
-            <div class="form-group">
-              <label>Ngày hoàn thành dự kiến</label>
-              <input id="c-end" type="date" />
-            </div>
-            <div class="form-group" style="grid-column:1/-1">
-              <label>Tiêu chuẩn kỹ thuật áp dụng</label>
-              <textarea id="c-specs" placeholder="TCVN, QCVN áp dụng..."></textarea>
-            </div>
-          </div>
-          <div id="const-modal-err" class="alert alert-danger" style="display:none;margin-top:12px"></div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeModal('const-modal')">Hủy</button>
-          <button class="btn btn-primary" onclick="saveConstruction()">Lưu</button>
-        </div>
-      </div>
-    </div>`;
+    `;
 
   await loadConstructions();
 }
@@ -119,55 +73,6 @@ async function loadConstructions() {
     tbody.innerHTML = `<tr><td colspan="7"><div class="alert alert-danger">${err.message}</div></td></tr>`;
   }
 }
-
-window.openConstModal = function() {
-  document.getElementById('const-modal').classList.remove('hidden');
-  ['c-name','c-code','c-type','c-start','c-end','c-specs'].forEach(i => {
-    const el = document.getElementById(i);
-    if (el) el.value = '';
-  });
-  document.getElementById('c-grade').value = '';
-  document.getElementById('const-modal-err').style.display = 'none';
-};
-
-window.saveConstruction = async function() {
-  const errEl = document.getElementById('const-modal-err');
-  errEl.style.display = 'none';
-  const proj = window._currentProject || {};
-
-  if (!proj.id) {
-    errEl.textContent = 'Vui lòng chọn dự án trước';
-    errEl.style.display = 'block';
-    return;
-  }
-
-  const data = {
-    project_id: proj.id,
-    name: document.getElementById('c-name').value.trim(),
-    construction_code: document.getElementById('c-code').value.trim(),
-    construction_type: document.getElementById('c-type').value.trim(),
-    construction_grade: document.getElementById('c-grade').value,
-    technical_specs: document.getElementById('c-specs').value.trim(),
-    start_date: document.getElementById('c-start').value,
-    expected_end_date: document.getElementById('c-end').value,
-  };
-
-  if (!data.name || !data.construction_type || !data.construction_grade) {
-    errEl.textContent = 'Vui lòng điền đầy đủ thông tin bắt buộc (*)';
-    errEl.style.display = 'block';
-    return;
-  }
-
-  try {
-    await projects.createConstruction(proj.id, data);
-    toast('Thêm gói thầu thành công');
-    closeModal('const-modal');
-    await loadConstructions();
-  } catch (err) {
-    errEl.textContent = err.message;
-    errEl.style.display = 'block';
-  }
-};
 
 window.viewDossiers = function(cid, cname) {
   window._currentConstruction = { id: cid, name: cname };

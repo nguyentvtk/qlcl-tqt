@@ -87,11 +87,19 @@ def read_all(sheet_name: str) -> list[dict]:
     """Đọc tất cả records từ sheet, bỏ qua row header.
     Nếu sheet chưa có header (mới tạo, chưa migrate), tự động migrate và trả về [].
     Mọi lỗi (kết nối, quota, cold-start) đều được bắt → trả về [] thay vì raise 500.
+
+    QUAN TRỌNG: mọi giá trị được ép về str. Google Sheets trả ô số dạng int/float,
+    nhưng Pydantic v2 KHÔNG coerce int → str (trong khi str → float/int thì có),
+    khiến record bị ValidationError và "biến mất" khỏi danh sách một cách lặng lẽ.
     """
     try:
         ws = get_or_create_sheet(sheet_name)
         records = ws.get_all_records(default_blank="")
-        return records
+        return [
+            {k: (v if isinstance(v, str) else "" if v is None else str(v))
+             for k, v in r.items()}
+            for r in records
+        ]
     except Exception:
         # Sheet chưa có header row hoặc lỗi kết nối → migrate schema rồi trả về []
         try:
@@ -221,6 +229,34 @@ def get_sheet_by_gid(gid: int) -> Optional[gspread.Worksheet]:
         if ws.id == gid:
             return ws
     return None
+
+
+def clean_numbers(r: dict, none_fields: tuple = (), zero_fields: tuple = ()) -> dict:
+    """
+    Chuẩn hoá trường số trước khi parse Pydantic:
+    - none_fields (Optional[float]): "" / "None" → None, còn lại ép float
+    - zero_fields (float mặc định 0): "" / "None" → 0.0, còn lại ép float
+    """
+    out = dict(r)
+    for field in none_fields:
+        v = out.get(field)
+        if v in ("", None, "None"):
+            out[field] = None
+        else:
+            try:
+                out[field] = float(str(v).replace(",", ".").strip())
+            except (ValueError, TypeError):
+                out[field] = None
+    for field in zero_fields:
+        v = out.get(field)
+        if v in ("", None, "None"):
+            out[field] = 0.0
+        else:
+            try:
+                out[field] = float(str(v).replace(",", ".").strip())
+            except (ValueError, TypeError):
+                out[field] = 0.0
+    return out
 
 
 def parse_vn_number(s) -> float:

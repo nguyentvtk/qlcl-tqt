@@ -117,6 +117,14 @@ export const contracts = {
   slaOverdue: () => get('/api/v1/contracts/payments/sla-overdue'),
 };
 
+// ─── Liên kết CPM5.0 ──────────────────────────────────────────────
+export const CPM_URL = 'https://cpmtanphu.vercel.app';
+export const cpm = {
+  info: () => get('/api/v1/cpm/info'),
+  tasks: (projectId) => get(`/api/v1/cpm/tasks${projectId ? '?project_id=' + encodeURIComponent(projectId) : ''}`),
+  appendices: (contractId) => get(`/api/v1/cpm/appendices${contractId ? '?contract_id=' + encodeURIComponent(contractId) : ''}`),
+};
+
 // ─── Settlements ──────────────────────────────────────────────────
 export const settlements = {
   list: (projectId) => get(`/api/v1/settlements${projectId ? '?project_id=' + projectId : ''}`),
