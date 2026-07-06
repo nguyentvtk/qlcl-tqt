@@ -108,6 +108,26 @@ def _map_nghiem_thu_row(r: dict, hop_dong_lookup: dict, goi_thau_lookup: dict) -
     )
 
 
+# ─── Sanitize helper ───────────────────────────────────────────────
+def _sanitize_dossier(r: dict) -> dict:
+    """
+    Chuẩn hoá record từ Google Sheets trước khi parse Pydantic v2:
+    ô số (id, template_id, construction_id...) trả về dạng int → phải ép str,
+    nếu không Pydantic v2 raise ValidationError và record bị bỏ qua lặng lẽ.
+    """
+    out = dict(r)
+    for field, v in out.items():
+        if v is None:
+            continue
+        if not isinstance(v, str):
+            out[field] = str(v)
+        elif v == "None":
+            out[field] = ""
+    if not str(out.get("status", "")).strip():
+        out["status"] = "PENDING"
+    return out
+
+
 # ─── Construction Dossiers ────────────────────────────────────────
 @router.get("", response_model=list[Dossier])
 async def list_dossiers(
@@ -121,14 +141,17 @@ async def list_dossiers(
     goi_thau_lookup = _build_goi_thau_lookup()
 
     # 1. Sheet "Nghiệm thu"
+    # Lọc theo construction_id (dạng composite "MãDA_MãGT"):
+    # join Mã HĐ → sheet Hợp đồng để lấy Mã GT của từng hàng nghiệm thu.
     result: list[Dossier] = []
     seen_ids: set[str] = set()
     for row in sm.read_sheet_by_name_raw("Nghiệm thu"):
         ma_da = str(row.get("Mã DA", "")).strip()
-        # Sheet "Nghiệm thu" không có Mã GT → không thể lọc theo construction_id composite
-        # Chỉ hiển thị khi top-level view (không có construction_id filter)
         if construction_id:
-            continue
+            ma_hd = str(row.get("Mã HĐ", "")).strip()
+            ma_gt = hop_dong_lookup.get(ma_hd, {}).get("ma_gt", "")
+            if f"{ma_da}_{ma_gt}" != construction_id:
+                continue
         if project_code and ma_da != project_code:
             continue
         d = _map_nghiem_thu_row(row, hop_dong_lookup, goi_thau_lookup)
@@ -147,7 +170,7 @@ async def list_dossiers(
         filters["status"] = status
     for r in (sm.read_where("construction_dossiers", **filters) if filters else sm.read_all("construction_dossiers")):
         try:
-            d = Dossier(**r)
+            d = Dossier(**_sanitize_dossier(r))
             if d.id not in seen_ids:
                 result.append(d)
                 seen_ids.add(d.id)
@@ -162,7 +185,7 @@ async def get_dossier(dossier_id: str, _: dict = Depends(get_current_user)):
     r = sm.read_by_id("construction_dossiers", dossier_id)
     if not r:
         raise HTTPException(404, "Không tìm thấy hồ sơ")
-    return Dossier(**r)
+    return Dossier(**_sanitize_dossier(r))
 
 
 @router.post("", response_model=Dossier, status_code=201)
@@ -204,6 +227,7 @@ async def upload_dossier(
     }
 
     record = sm.insert("construction_dossiers", data)
+    record = _sanitize_dossier(record)
 
     # Ghi log SLA cho hồ sơ nghiệm thu
     sla_data = {
@@ -261,7 +285,7 @@ async def dossier_action(
         })
 
     updated = sm.read_by_id("construction_dossiers", dossier_id)
-    return Dossier(**updated)
+    return Dossier(**_sanitize_dossier(updated))
 
 
 @router.get("/{dossier_id}/history")

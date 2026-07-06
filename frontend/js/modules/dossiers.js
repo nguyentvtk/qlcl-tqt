@@ -1,13 +1,14 @@
-import { dossiers } from '../api.js';
+import { dossiers, projects } from '../api.js';
 import { esc, fmtDate, fmtDateTime, badge, toast, slaStatus, buildOptions } from '../utils.js';
 
 let _templates = [];
+let _constructions = [];
 
 export async function renderDossiers(container) {
   const construction = window._currentConstruction || {};
 
   container.innerHTML = `
-    ${construction.id ? `<div class="breadcrumb"><a href="#" onclick="navigate('constructions')">Hạng mục</a> › <strong>${esc(construction.name)}</strong></div>` : ''}
+    ${construction.id ? `<div class="breadcrumb"><a href="#" onclick="navigate('constructions')">Gói thầu</a> › <strong>${esc(construction.name)}</strong> <a href="#" onclick="clearDossierFilter()" style="margin-left:8px;font-size:12px">✕ Xem tất cả hồ sơ</a></div>` : ''}
     <div class="tabs">
       <div class="tab active" onclick="switchDossierTab('list',this)">📋 Danh sách hồ sơ</div>
       <div class="tab" onclick="switchDossierTab('upload',this)">📤 Nộp hồ sơ</div>
@@ -47,6 +48,10 @@ export async function renderDossiers(container) {
       <div class="card">
         <div class="card-title">📤 Nộp hồ sơ mới</div>
         <div class="form-grid">
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Gói thầu / Hạng mục *</label>
+            <select id="d-construction"><option value="">Đang tải danh sách gói thầu...</option></select>
+          </div>
           <div class="form-group">
             <label>Loại hồ sơ (mẫu) *</label>
             <select id="d-template"></select>
@@ -192,7 +197,54 @@ export async function renderDossiers(container) {
   document.getElementById('stamp-month').value = String(now.getMonth() + 1).padStart(2, '0');
   document.getElementById('stamp-year').value = now.getFullYear();
 
-  await Promise.all([loadDossiers(), loadTemplateOptions()]);
+  _setupDropZone();
+  await Promise.all([loadDossiers(), loadTemplateOptions(), loadConstructionOptions()]);
+}
+
+// Kéo-thả file vào upload-zone
+function _setupDropZone() {
+  const zone = document.getElementById('upload-zone');
+  const input = document.getElementById('d-file');
+  if (!zone || !input) return;
+  ['dragover', 'dragenter'].forEach(ev => zone.addEventListener(ev, e => {
+    e.preventDefault();
+    zone.style.borderColor = 'var(--primary, #2563eb)';
+    zone.style.background = 'rgba(37,99,235,0.05)';
+  }));
+  ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => {
+    e.preventDefault();
+    zone.style.borderColor = '';
+    zone.style.background = '';
+  }));
+  zone.addEventListener('drop', e => {
+    const files = e.dataTransfer?.files;
+    if (files?.length) {
+      input.files = files;
+      handleFileSelect(input);
+    }
+  });
+}
+
+// Dropdown Gói thầu trong tab Nộp hồ sơ
+async function loadConstructionOptions() {
+  const sel = document.getElementById('d-construction');
+  if (!sel) return;
+  try {
+    _constructions = await projects.listAllConstructions();
+    const current = window._currentConstruction || {};
+    sel.innerHTML = `<option value="">-- Chọn gói thầu --</option>` +
+      _constructions.map(c => {
+        const label = [c.construction_code || c.id, c.name, c.project_id ? `(${c.project_id})` : '']
+          .filter(Boolean).join(' — ');
+        return `<option value="${esc(c.id)}" ${c.id === current.id ? 'selected' : ''}>${esc(label)}</option>`;
+      }).join('');
+    // Đi từ nút 📁 Hồ sơ của Gói thầu → chọn sẵn gói thầu đó
+    if (current.id && !_constructions.some(c => c.id === current.id)) {
+      sel.innerHTML += `<option value="${esc(current.id)}" selected>${esc(current.name || current.id)}</option>`;
+    }
+  } catch {
+    sel.innerHTML = `<option value="">-- Không tải được danh sách gói thầu --</option>`;
+  }
 }
 
 async function loadTemplateOptions() {
@@ -213,6 +265,8 @@ async function loadDossiers() {
   try {
     const params = {};
     if (construction.id) params.construction_id = construction.id;
+    const statusFilter = document.getElementById('filter-status')?.value;
+    if (statusFilter) params.status = statusFilter;
     const list = await dossiers.list(params);
 
     if (!list.length) {
@@ -258,6 +312,11 @@ async function loadDossiers() {
 
 window.filterDossiers = loadDossiers;
 
+window.clearDossierFilter = function() {
+  window._currentConstruction = null;
+  window.navigate('dossiers');
+};
+
 window.switchDossierTab = function(tab, el) {
   document.querySelectorAll('#tab-list,#tab-upload,#tab-stamp').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -273,19 +332,25 @@ window.handleFileSelect = function(input) {
 window.submitDossier = async function() {
   const errEl = document.getElementById('upload-err');
   errEl.style.display = 'none';
-  const construction = window._currentConstruction || {};
 
-  if (!construction.id) {
-    errEl.textContent = 'Chưa chọn hạng mục công trình';
+  const constructionId = document.getElementById('d-construction')?.value
+    || (window._currentConstruction || {}).id || '';
+  if (!constructionId) {
+    errEl.textContent = 'Vui lòng chọn Gói thầu / Hạng mục';
     errEl.style.display = 'block';
     return;
   }
 
   const file = document.getElementById('d-file').files[0];
   if (!file) { errEl.textContent = 'Vui lòng chọn file'; errEl.style.display = 'block'; return; }
+  if (file.size > 50 * 1024 * 1024) {
+    errEl.textContent = 'File vượt quá 50MB';
+    errEl.style.display = 'block';
+    return;
+  }
 
   const fd = new FormData();
-  fd.append('construction_id', construction.id);
+  fd.append('construction_id', constructionId);
   fd.append('template_id', document.getElementById('d-template').value || '');
   fd.append('document_name', document.getElementById('d-name').value.trim());
   fd.append('document_number', document.getElementById('d-number').value.trim());
@@ -299,14 +364,27 @@ window.submitDossier = async function() {
     return;
   }
 
+  const btn = document.querySelector('#tab-upload .btn-primary');
   try {
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Đang tải lên...'; }
     await dossiers.upload(fd);
     toast('Nộp hồ sơ thành công — SLA 24 giờ bắt đầu tính');
+    // Reset form
+    ['d-name', 'd-number', 'd-sign-date'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.getElementById('d-template').value = '';
+    document.getElementById('d-format').value = '';
+    document.getElementById('d-file').value = '';
+    document.getElementById('upload-zone-text').textContent = 'Nhấn để chọn file hoặc kéo thả vào đây';
     switchDossierTab('list', document.querySelector('.tab'));
     await loadDossiers();
   } catch (err) {
     errEl.textContent = err.message;
     errEl.style.display = 'block';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📤 Nộp hồ sơ'; }
   }
 };
 
