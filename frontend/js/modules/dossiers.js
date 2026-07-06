@@ -180,6 +180,22 @@ export async function renderDossiers(container) {
       </div>
     </div>
 
+    <!-- Modal: Lịch sử hồ sơ -->
+    <div class="modal-overlay hidden" id="history-modal">
+      <div class="modal" style="max-width:600px;width:95%">
+        <div class="modal-header">
+          <h3>📜 Lịch sử hồ sơ <span id="history-doc-id" style="font-weight:400;font-size:13px;color:#6b7280"></span></h3>
+          <button class="modal-close" onclick="closeModal('history-modal')">✕</button>
+        </div>
+        <div class="modal-body" id="history-body" style="max-height:65vh;overflow-y:auto">
+          Đang tải...
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('history-modal')">Đóng</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal: Phê duyệt hồ sơ -->
     <div class="modal-overlay hidden" id="approval-modal">
       <div class="modal">
@@ -464,18 +480,75 @@ window.doApproval = async function(action) {
 };
 
 window.viewHistory = async function(id) {
+  const modal = document.getElementById('history-modal');
+  const body = document.getElementById('history-body');
+  document.getElementById('history-doc-id').textContent = `— ${id}`;
+  modal.classList.remove('hidden');
+  body.innerHTML = '<div style="text-align:center;padding:24px;color:#6b7280">⏳ Đang tải lịch sử...</div>';
+
   try {
     const h = await dossiers.history(id);
     const logs = h.approval_logs || [];
     const slaLogs = h.sla_logs || [];
-    alert(
-      'Lịch sử phê duyệt:\n' +
-      logs.map(l => `${fmtDateTime(l.action_at)} — ${l.action} — ${l.comment || ''}`).join('\n') +
-      '\n\nSLA:\n' +
-      slaLogs.map(s => `Deadline: ${fmtDateTime(s.deadline_at)} | Hoàn tất: ${fmtDateTime(s.completed_at)} | Quá hạn: ${s.is_overdue}`).join('\n')
-    );
+
+    const ACTION_UI = {
+      APPROVE: { icon: '✅', label: 'Phê duyệt',  color: 'var(--success, #16a34a)' },
+      REJECT:  { icon: '❌', label: 'Từ chối',    color: 'var(--danger, #dc2626)' },
+      UPLOAD:  { icon: '📤', label: 'Nộp hồ sơ',  color: 'var(--primary, #2563eb)' },
+    };
+
+    // ── Timeline phê duyệt ──
+    let html = `<div style="font-weight:700;font-size:13px;margin-bottom:10px">🗂 Lịch sử phê duyệt</div>`;
+    if (!logs.length) {
+      html += `<div style="text-align:center;padding:20px;background:var(--bg-secondary);border-radius:10px;color:#6b7280;font-size:13px">
+        <div style="font-size:28px;margin-bottom:6px">🕊</div>
+        Chưa có hoạt động phê duyệt nào cho hồ sơ này
+      </div>`;
+    } else {
+      html += `<div style="border-left:2px solid var(--border,#e5e7eb);margin-left:10px;padding-left:0">` +
+        logs.map(l => {
+          const ui = ACTION_UI[l.action] || { icon: '•', label: l.action, color: '#6b7280' };
+          return `
+          <div style="position:relative;padding:0 0 16px 24px">
+            <div style="position:absolute;left:-11px;top:0;width:20px;height:20px;border-radius:50%;
+                        background:#fff;border:2px solid ${ui.color};display:flex;align-items:center;
+                        justify-content:center;font-size:10px">${ui.icon}</div>
+            <div style="font-weight:600;font-size:13px;color:${ui.color}">${ui.label}</div>
+            <div style="font-size:12px;color:#6b7280">${fmtDateTime(l.action_at)}${l.actor_id ? ` — bởi ${esc(String(l.actor_id))}` : ''}</div>
+            ${l.comment ? `<div style="margin-top:4px;font-size:12px;background:var(--bg-secondary);border-radius:8px;padding:8px 10px">💬 ${esc(l.comment)}</div>` : ''}
+          </div>`;
+        }).join('') + `</div>`;
+    }
+
+    // ── SLA 24 giờ ──
+    html += `<div style="font-weight:700;font-size:13px;margin:16px 0 10px">⏱ SLA kiểm tra (24 giờ)</div>`;
+    if (!slaLogs.length) {
+      html += `<div style="font-size:12px;color:#6b7280;background:var(--bg-secondary);border-radius:8px;padding:10px">Không có dữ liệu SLA (hồ sơ từ sheet gốc hoặc nộp trước khi áp dụng SLA).</div>`;
+    } else {
+      html += slaLogs.map(s => {
+        const overdue = String(s.is_overdue).toUpperCase() === 'TRUE';
+        const done = !!s.completed_at;
+        const badgeHtml = done
+          ? (overdue
+              ? '<span style="background:#fee2e2;color:#b91c1c;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600">⚠ Hoàn tất — QUÁ HẠN</span>'
+              : '<span style="background:#dcfce7;color:#15803d;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600">✓ Hoàn tất đúng hạn</span>')
+          : '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600">⏳ Đang trong SLA</span>';
+        return `
+        <div style="border:1px solid var(--border,#e5e7eb);border-radius:10px;padding:12px;margin-bottom:8px;font-size:12px">
+          <div style="margin-bottom:8px">${badgeHtml}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;color:#374151">
+            <div>📥 Nộp lúc:<br><strong>${fmtDateTime(s.requested_at)}</strong></div>
+            <div>⏰ Hạn xử lý:<br><strong>${fmtDateTime(s.deadline_at)}</strong></div>
+            <div>🏁 Hoàn tất:<br><strong>${done ? fmtDateTime(s.completed_at) : '—'}</strong></div>
+            <div>👤 Người nộp:<br><strong>${esc(String(s.requested_by || '—'))}</strong></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    body.innerHTML = html;
   } catch (err) {
-    toast(err.message, 'error');
+    body.innerHTML = `<div class="alert alert-danger">Không tải được lịch sử: ${esc(err.message)}</div>`;
   }
 };
 

@@ -16,6 +16,7 @@ from models import Dossier, DossierCreate, DossierAction, Signature, SignatureCr
 from middleware.auth import get_current_user
 from services import drive_service
 from config import PROJECT_PHASES
+from schema_definitions import DEFAULT_DOSSIER_GROUPS, DEFAULT_DOSSIER_TEMPLATES
 import sheets_manager as sm
 
 router = APIRouter(prefix="/api/v1/dossiers", tags=["Hồ sơ & Nghiệm thu"])
@@ -96,9 +97,30 @@ def _resolve_drive_folder(construction_id: str, phase: str, submission_round: st
 @router.get("/templates")
 async def list_templates(_: dict = Depends(get_current_user)):
     templates = sm.read_all("dossier_templates")
-    groups = {g["id"]: g for g in sm.read_all("dossier_groups")}
+    if not templates:
+        # Sheet trống (SKIP_MIGRATION=true nên startup không seed) → seed ngay
+        try:
+            for t in DEFAULT_DOSSIER_TEMPLATES:
+                sm.insert("dossier_templates", dict(t))
+            templates = sm.read_all("dossier_templates")
+        except Exception:
+            pass
+        if not templates:  # Sheets lỗi → vẫn trả về danh mục mặc định trong bộ nhớ
+            templates = [dict(t) for t in DEFAULT_DOSSIER_TEMPLATES]
+
+    groups = {str(g.get("id")): g for g in sm.read_all("dossier_groups")}
+    if not groups:
+        try:
+            for g in DEFAULT_DOSSIER_GROUPS:
+                sm.insert("dossier_groups", dict(g))
+            groups = {str(g.get("id")): g for g in sm.read_all("dossier_groups")}
+        except Exception:
+            pass
+        if not groups:
+            groups = {str(g["id"]): dict(g) for g in DEFAULT_DOSSIER_GROUPS}
+
     for t in templates:
-        t["group"] = groups.get(t.get("group_id"), {})
+        t["group"] = groups.get(str(t.get("group_id")), {})
     return templates
 
 
