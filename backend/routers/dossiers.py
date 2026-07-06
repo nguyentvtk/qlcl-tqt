@@ -52,7 +52,19 @@ def _build_hop_dong_lookup() -> dict:
     return lookup
 
 
-def _map_nghiem_thu_row(r: dict, hop_dong_lookup: dict) -> Dossier | None:
+def _build_goi_thau_lookup() -> dict:
+    """Tạo lookup {f"{ma_da}_{ma_gt}" → ten_gt} từ sheet 'Gói thầu'."""
+    lookup = {}
+    for r in sm.read_sheet_by_name_raw("Gói thầu"):
+        ma_da = str(r.get("Mã DA", "")).strip()
+        ma_gt = str(r.get("Mã GT", "")).strip()
+        ten_gt = str(r.get("Tên gói thầu", "")).strip()
+        if ma_da and ma_gt:
+            lookup[f"{ma_da}_{ma_gt}"] = ten_gt
+    return lookup
+
+
+def _map_nghiem_thu_row(r: dict, hop_dong_lookup: dict, goi_thau_lookup: dict) -> Dossier | None:
     """Chuyển hàng sheet 'Nghiệm thu' sang Dossier model."""
     ma_hsnt = str(r.get("Mã HSNT", "")).strip()
     ma_hd   = str(r.get("Mã HĐ", "")).strip()
@@ -65,6 +77,9 @@ def _map_nghiem_thu_row(r: dict, hop_dong_lookup: dict) -> Dossier | None:
     hd_info = hop_dong_lookup.get(ma_hd, {})
     ma_gt   = hd_info.get("ma_gt", "")
 
+    # Join với bảng Gói thầu để lấy Tên gói thầu
+    ten_gt = goi_thau_lookup.get(f"{ma_da}_{ma_gt}", "")
+
     status_map = {
         "Đã thanh toán": "APPROVED",
         "Chờ nghiệm thu": "PENDING",
@@ -74,7 +89,7 @@ def _map_nghiem_thu_row(r: dict, hop_dong_lookup: dict) -> Dossier | None:
     return Dossier(
         id=ma_hsnt,
         document_number=ma_hsnt,
-        document_name=ten_da,          # Tên DA hiển thị trực tiếp
+        document_name=ten_da,          # Tên DA → hiển thị dòng 1
         project_code=ma_da,
         contract_id=ma_hd,
         bid_package_code=ma_gt,        # Mã GT từ bảng Hợp đồng
@@ -85,7 +100,7 @@ def _map_nghiem_thu_row(r: dict, hop_dong_lookup: dict) -> Dossier | None:
         sign_date=str(r.get("Ngày NT", "")),
         payment_amount=str(r.get("Giá trị NT", "")),
         payment_pct=str(r.get("% Giá trị NT", "")),
-        project_name=ten_da,
+        project_name=ten_gt,           # Tên gói thầu → hiển thị dòng 2
         contractor_name=str(r.get("Nhà thầu", "")),
         file_path="",
         format_type="SCAN_PDF",
@@ -101,8 +116,9 @@ async def list_dossiers(
     status: Optional[str] = None,
     _: dict = Depends(get_current_user)
 ):
-    # Build lookup Mã HĐ → Mã GT một lần duy nhất
+    # Build lookup một lần duy nhất
     hop_dong_lookup = _build_hop_dong_lookup()
+    goi_thau_lookup = _build_goi_thau_lookup()
 
     # 1. Sheet "Nghiệm thu"
     result: list[Dossier] = []
@@ -115,7 +131,7 @@ async def list_dossiers(
             continue
         if project_code and ma_da != project_code:
             continue
-        d = _map_nghiem_thu_row(row, hop_dong_lookup)
+        d = _map_nghiem_thu_row(row, hop_dong_lookup, goi_thau_lookup)
         if d:
             if status and d.status != status:
                 continue

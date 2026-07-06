@@ -223,16 +223,16 @@ async function loadDossiers() {
     const tpl = Object.fromEntries(_templates.map(t => [t.id, t]));
 
     tbody.innerHTML = list.map(d => {
-      // Dòng "Dự án / Gói thầu": hiển thị Mã DA và Mã GT nếu có
+      // Dòng "Dự án / Gói thầu": dòng 1 = Mã DA / Tên DA, dòng 2 = Tên gói thầu
       const daGt = [
-        d.project_code   ? `<span style="font-weight:600">${esc(d.project_code)}</span>` : '',
-        d.bid_package_code ? `<span style="color:#6b7280"> / ${esc(d.bid_package_code)}</span>` : '',
+        d.project_code  ? `<span style="font-weight:600">${esc(d.project_code)}</span>` : '',
+        d.document_name ? `<span style="color:#374151"> / ${esc(d.document_name)}</span>` : '',
       ].filter(Boolean).join('');
       const projectLine = daGt
         ? `<div style="font-size:12px">${daGt}</div>`
         : '';
-      const nameLine = d.document_name
-        ? `<div style="font-size:12px;color:#374151;margin-top:2px">${esc(d.document_name)}</div>`
+      const nameLine = d.project_name
+        ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${esc(d.project_name)}</div>`
         : '';
 
       return `
