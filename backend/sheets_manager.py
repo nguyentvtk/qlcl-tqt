@@ -143,11 +143,12 @@ def insert(sheet_name: str, data: dict) -> dict:
     if "updated_at" in col_map and "updated_at" not in data:
         data["updated_at"] = now
 
-    # Build row theo thứ tự cột
+    # Build row theo thứ tự cột (None → "" thay vì chuỗi "None")
     max_col = max(col_map.values()) + 1
     row = [""] * max_col
     for col_name, col_idx in col_map.items():
-        row[col_idx] = str(data.get(col_name, ""))
+        v = data.get(col_name)
+        row[col_idx] = "" if v is None else str(v)
 
     ws.append_row(row, value_input_option="USER_ENTERED")
     return data

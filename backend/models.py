@@ -246,6 +246,7 @@ class SettlementCreate(BaseModel):
     project_name: Optional[str] = None          # Tên DA
     settlement_number: Optional[str] = None     # Số tờ trình / Mã QT
     contract_group: Optional[str] = None        # Nhóm dự án (A/B/C)
+    attached_forms: Optional[str] = None        # Mẫu biểu TT 73/2026/TT-BTC (vd: "01/QTDA,02/QTDA")
 
 
 class Settlement(SettlementCreate):

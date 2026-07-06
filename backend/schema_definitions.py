@@ -71,7 +71,8 @@ SHEET_SCHEMAS: dict[str, list[str]] = {
         "id", "project_id", "proposed_settlement_amount",
         "audited_amount", "approved_amount", "approver_org_id",
         "verifier_org_id", "status", "submission_deadline",
-        "approved_decision_number", "approved_decision_date", "created_at"
+        "approved_decision_number", "approved_decision_date", "created_at",
+        "attached_forms"  # Mẫu biểu TT 73/2026/TT-BTC đính kèm (APPEND cuối — không chen giữa)
     ],
     "inspection_sla_logs": [
         "id", "dossier_id", "requested_by", "requested_at",

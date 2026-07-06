@@ -35,7 +35,9 @@ async function request(method, path, body = null, isForm = false) {
 
   if (!res.ok) {
     const msg = data?.detail || JSON.stringify(data);
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    err.status = res.status; // để phân biệt 401 (token hết hạn) với lỗi server/mạng
+    throw err;
   }
   return data;
 }
@@ -117,6 +119,7 @@ export const contracts = {
 // ─── Settlements ──────────────────────────────────────────────────
 export const settlements = {
   list: (projectId) => get(`/api/v1/settlements${projectId ? '?project_id=' + projectId : ''}`),
+  templates: () => get('/api/v1/settlements/templates'),
   get: (id) => get(`/api/v1/settlements/${id}`),
   create: (data) => post('/api/v1/settlements', data),
   audit: (id, amount) => put(`/api/v1/settlements/${id}/audit?audited_amount=${amount}`, {}),

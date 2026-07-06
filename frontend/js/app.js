@@ -30,9 +30,23 @@ async function tryAutoLogin() {
   if (!token) return false;
   try {
     _currentUser = await auth.me();
+    localStorage.setItem('user_info', JSON.stringify(_currentUser));
     return true;
-  } catch {
-    setToken(null);
+  } catch (err) {
+    // Chỉ xoá token khi thật sự hết hạn / không hợp lệ (401/403).
+    // Lỗi server (5xx) hoặc mất mạng tạm thời → dùng thông tin user đã cache.
+    if (err.status === 401 || err.status === 403) {
+      setToken(null);
+      localStorage.removeItem('user_info');
+      return false;
+    }
+    try {
+      const cached = JSON.parse(localStorage.getItem('user_info') || 'null');
+      if (cached) {
+        _currentUser = cached;
+        return true;
+      }
+    } catch {}
     return false;
   }
 }
@@ -52,6 +66,7 @@ async function handleLogin(e) {
     const res = await auth.login(email, password);
     setToken(res.access_token);
     _currentUser = res.user;
+    localStorage.setItem('user_info', JSON.stringify(res.user)); // cache cho auto-login
     showApp();
   } catch (err) {
     errEl.textContent = err.message;
@@ -104,6 +119,7 @@ window.closeModal = function(id) {
 
 window.logout = function() {
   setToken(null);
+  localStorage.removeItem('user_info');
   _currentUser = null;
   document.getElementById('auth-screen').style.display = '';
   document.getElementById('app').classList.add('hidden');

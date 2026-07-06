@@ -132,6 +132,21 @@ export async function renderSettlements(container) {
               <input id="sm-verifier" type="text" placeholder="VD: Kiểm toán Nhà nước..." />
             </div>
           </div>
+
+          <!-- Mẫu biểu quyết toán theo Thông tư 73/2026/TT-BTC -->
+          <div style="margin-top:16px">
+            <label style="font-weight:600;display:block;margin-bottom:6px">
+              📋 Mẫu biểu quyết toán kèm theo hồ sơ (Thông tư 73/2026/TT-BTC — Bộ Tài chính)
+            </label>
+            <div class="alert alert-info" style="margin-bottom:8px;font-size:12px">
+              Dự án hoàn thành / dừng thực hiện đã có khối lượng nghiệm thu: bắt buộc Mẫu 01–07 và Phiếu giao nhận (Mẫu 12).
+              Dự án quy hoạch / chuẩn bị đầu tư: dùng Mẫu 03, 07, 08.
+            </div>
+            <div id="sm-forms" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px">
+              Đang tải danh mục mẫu biểu...
+            </div>
+          </div>
+
           <div id="sett-modal-err" class="alert alert-danger" style="display:none;margin-top:12px"></div>
         </div>
         <div class="modal-footer">
@@ -234,7 +249,7 @@ export async function renderSettlements(container) {
       </div>
     </div>`;
 
-  await Promise.all([loadSettlements(), loadWarnings()]);
+  await Promise.all([loadSettlements(), loadWarnings(), loadFormTemplates()]);
   await loadFormOptions();
 }
 
@@ -243,6 +258,41 @@ let _settList = [];
 let _auditId  = null;
 let _approveId = null;
 let _contractMap = {}; // id → label
+
+// Danh mục 12 mẫu biểu TT 73/2026/TT-BTC (fallback nếu API lỗi)
+const DEFAULT_FORM_TEMPLATES = [
+  { code: '01/QTDA', name: 'Báo cáo tổng hợp quyết toán vốn đầu tư dự án', required_for_completed: true },
+  { code: '02/QTDA', name: 'Danh mục văn bản (văn bản pháp lý, hợp đồng)', required_for_completed: true },
+  { code: '03/QTDA', name: 'Bảng đối chiếu số liệu cấp vốn, cho vay, thanh toán', required_for_completed: true },
+  { code: '04/QTDA', name: 'Chi tiết chi phí đầu tư đề nghị quyết toán', required_for_completed: true },
+  { code: '05/QTDA', name: 'Chi tiết giá trị tài sản hình thành qua đầu tư', required_for_completed: true },
+  { code: '06/QTDA', name: 'Chi tiết giá trị vật tư, vật liệu, thiết bị tồn đọng', required_for_completed: true },
+  { code: '07/QTDA', name: 'Tình hình công nợ của dự án', required_for_completed: true },
+  { code: '08/QTDA', name: 'Báo cáo QT dự án quy hoạch/chuẩn bị đầu tư/dừng chưa có khối lượng', required_for_completed: false },
+  { code: '09/QTDA', name: 'Báo cáo kết quả phê duyệt tổng QT dự án quan trọng quốc gia', required_for_completed: false },
+  { code: '10/QTDA', name: 'Quyết định phê duyệt quyết toán vốn đầu tư', required_for_completed: false },
+  { code: '11/QTDA', name: 'Báo cáo tình hình QT dự án sử dụng vốn đầu tư công trong năm', required_for_completed: false },
+  { code: '12/QTDA', name: 'Phiếu giao nhận hồ sơ quyết toán vốn đầu tư dự án', required_for_completed: true },
+];
+let _formTemplates = DEFAULT_FORM_TEMPLATES;
+
+function renderFormChecklist() {
+  const box = document.getElementById('sm-forms');
+  if (!box) return;
+  box.innerHTML = _formTemplates.map(f => `
+    <label style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;cursor:pointer">
+      <input type="checkbox" class="sm-form-cb" value="${esc(f.code)}" ${f.required_for_completed ? 'checked' : ''} style="margin-top:2px" />
+      <span><strong>Mẫu số ${esc(f.code)}</strong>${f.required_for_completed ? ' <span style="color:var(--danger)">*</span>' : ''} — ${esc(f.name)}</span>
+    </label>`).join('');
+}
+
+async function loadFormTemplates() {
+  try {
+    const r = await settlements.templates();
+    if (r?.templates?.length) _formTemplates = r.templates;
+  } catch { /* dùng fallback tĩnh */ }
+  renderFormChecklist();
+}
 
 // ─── Load dữ liệu ────────────────────────────────────────────────
 async function loadSettlements() {
@@ -261,6 +311,10 @@ async function loadSettlements() {
         : `<div style="font-weight:600;font-size:12px">${esc(s.project_id)}</div>`;
 
       const maQt = s.settlement_number || s.approved_decision_number || '—';
+      const nForms = s.attached_forms ? s.attached_forms.split(',').filter(Boolean).length : 0;
+      const formsBadge = nForms
+        ? `<div style="font-size:11px;color:#6b7280" title="${esc(s.attached_forms)}">📋 ${nForms} mẫu biểu TT 73/2026/TT-BTC</div>`
+        : '';
 
       const isSheet = !!s.project_name; // Dữ liệu từ sheet có project_name
       const canAudit   = !isSheet && s.status === 'PREPARING';
@@ -269,7 +323,7 @@ async function loadSettlements() {
       return `
       <tr>
         <td>${projLabel}</td>
-        <td style="font-size:12px">${esc(maQt)}</td>
+        <td style="font-size:12px">${esc(maQt)}${formsBadge}</td>
         <td class="currency">${fmt(s.proposed_settlement_amount)}</td>
         <td class="currency">${s.audited_amount  ? fmt(s.audited_amount)  : '<span style="color:#9ca3af">—</span>'}</td>
         <td class="currency">${s.approved_amount ? fmt(s.approved_amount) : '<span style="color:#9ca3af">—</span>'}</td>
@@ -379,6 +433,7 @@ window.openSettModal = function() {
   document.getElementById('sm-group').value = '';
   document.getElementById('sm-deadline').value = '';
   document.getElementById('sett-modal-err').style.display = 'none';
+  renderFormChecklist(); // reset checklist mẫu biểu về mặc định (Mẫu 01–07, 12)
 };
 
 // Tự tính deadline khi chọn nhóm dự án
@@ -395,6 +450,9 @@ window.saveSettlement = async function() {
   const errEl = document.getElementById('sett-modal-err');
   errEl.style.display = 'none';
 
+  const attachedForms = [...document.querySelectorAll('.sm-form-cb:checked')]
+    .map(cb => cb.value).join(',');
+
   const data = {
     project_id: document.getElementById('sm-project').value,
     proposed_settlement_amount: parseFloat(document.getElementById('sm-amount').value) || 0,
@@ -402,6 +460,7 @@ window.saveSettlement = async function() {
     approver_org_id: document.getElementById('sm-approver').value.trim() || null,
     verifier_org_id: document.getElementById('sm-verifier').value.trim() || null,
     contract_group: document.getElementById('sm-group').value || null,
+    attached_forms: attachedForms || null,
   };
 
   if (!data.project_id || !data.proposed_settlement_amount) {

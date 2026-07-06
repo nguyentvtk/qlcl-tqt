@@ -67,7 +67,13 @@ async def list_warnings(
         records = sm.read_where("contractor_settlement_warnings", contract_id=contract_id)
     else:
         records = sm.read_all("contractor_settlement_warnings")
-    return [Warning(**r) for r in records]
+    result = []
+    for r in records:
+        try:
+            result.append(Warning(**_sanitize_warning(r)))
+        except Exception:
+            pass
+    return result
 
 
 @router.post("/warnings", response_model=Warning, status_code=201)
@@ -84,8 +90,11 @@ async def create_warning(body: WarningCreate, _: dict = Depends(get_current_user
     if len(existing) >= 3:
         raise HTTPException(400, "Đã gửi đủ 3 cảnh báo. Có thể lập quyết toán độc lập.")
 
-    record = sm.insert("contractor_settlement_warnings", body.model_dump())
-    return Warning(**record)
+    data = body.model_dump()
+    data["contractor_response_status"] = "NO_RESPONSE"
+    data["is_delivered"] = "FALSE"
+    record = sm.insert("contractor_settlement_warnings", data)
+    return Warning(**_sanitize_warning(record))
 
 
 @router.get("/warnings/overdue")
@@ -135,33 +144,110 @@ async def update_warning_response(
     return updated
 
 
+# ─── Mẫu biểu quyết toán theo Thông tư 73/2026/TT-BTC ──────────────
+# (hướng dẫn Nghị định 193/2026/NĐ-CP, hiệu lực từ 01/7/2026)
+SETTLEMENT_FORM_TEMPLATES = [
+    {"code": "01/QTDA", "name": "Báo cáo tổng hợp quyết toán vốn đầu tư dự án", "required_for_completed": True},
+    {"code": "02/QTDA", "name": "Danh mục văn bản (văn bản pháp lý, hợp đồng)", "required_for_completed": True},
+    {"code": "03/QTDA", "name": "Bảng đối chiếu số liệu cấp vốn, cho vay, thanh toán", "required_for_completed": True},
+    {"code": "04/QTDA", "name": "Chi tiết chi phí đầu tư đề nghị quyết toán", "required_for_completed": True},
+    {"code": "05/QTDA", "name": "Chi tiết giá trị tài sản hình thành qua đầu tư", "required_for_completed": True},
+    {"code": "06/QTDA", "name": "Chi tiết giá trị vật tư, vật liệu, thiết bị tồn đọng", "required_for_completed": True},
+    {"code": "07/QTDA", "name": "Tình hình công nợ của dự án", "required_for_completed": True},
+    {"code": "08/QTDA", "name": "Báo cáo QT dùng cho dự án quy hoạch/chuẩn bị đầu tư/dừng thực hiện chưa có khối lượng", "required_for_completed": False},
+    {"code": "09/QTDA", "name": "Báo cáo kết quả phê duyệt tổng quyết toán dự án quan trọng quốc gia", "required_for_completed": False},
+    {"code": "10/QTDA", "name": "Quyết định phê duyệt quyết toán vốn đầu tư", "required_for_completed": False},
+    {"code": "11/QTDA", "name": "Báo cáo tình hình quyết toán dự án sử dụng vốn đầu tư công trong năm", "required_for_completed": False},
+    {"code": "12/QTDA", "name": "Phiếu giao nhận hồ sơ quyết toán vốn đầu tư dự án", "required_for_completed": True},
+]
+
+
+@router.get("/templates")
+async def list_settlement_templates(_: dict = Depends(get_current_user)):
+    """
+    Danh mục 12 mẫu biểu quyết toán vốn đầu tư dự án (TT 73/2026/TT-BTC).
+    Dự án hoàn thành / dừng thực hiện đã có khối lượng nghiệm thu: Mẫu 01–07 (+12).
+    Dự án quy hoạch / chuẩn bị đầu tư / dừng chưa có khối lượng: Mẫu 03, 07, 08.
+    """
+    return {
+        "circular": "Thông tư 73/2026/TT-BTC ngày 25/6/2026 của Bộ Tài chính",
+        "decree": "Nghị định 193/2026/NĐ-CP",
+        "templates": SETTLEMENT_FORM_TEMPLATES,
+    }
+
+
 # ─── Sanitize helper ───────────────────────────────────────────────
 def _sanitize_record(r: dict) -> dict:
     """
-    Chuyển empty string từ Google Sheets → None/0 cho các trường số
-    để tránh Pydantic v2 raise ValidationError khi float("") fails.
+    Chuẩn hoá record đọc từ Google Sheets trước khi parse Pydantic v2:
+    - Ô số (id, project_id...) được Sheets trả về dạng int/float
+      → phải ép về str vì Pydantic v2 KHÔNG tự coerce int → str.
+    - Chuỗi "None"/"" (do ghi nhầm trước đây) → None.
+    - Trường tiền tệ: empty → None/0, chuỗi → float.
     """
     out = dict(r)
-    # Trường Optional[float]: empty → None
+
+    # 1. Trường Optional[float]: empty → None
     for field in ("audited_amount", "approved_amount"):
         v = out.get(field)
-        if v == "" or v is None:
+        if v in ("", None, "None"):
             out[field] = None
         else:
             try:
                 out[field] = float(str(v).replace(",", ".").strip())
             except (ValueError, TypeError):
                 out[field] = None
-    # Trường float = 0: empty → 0
+
+    # 2. Trường float mặc định 0: empty → 0
     for field in ("proposed_settlement_amount",):
         v = out.get(field)
-        if v == "" or v is None:
+        if v in ("", None, "None"):
             out[field] = 0.0
         else:
             try:
                 out[field] = float(str(v).replace(",", ".").strip())
             except (ValueError, TypeError):
                 out[field] = 0.0
+
+    # 3. Trường chuỗi bắt buộc: int/float từ Sheets → str
+    for field in ("id", "project_id"):
+        v = out.get(field)
+        if v is not None and not isinstance(v, str):
+            out[field] = str(v)
+
+    # 4. Trường chuỗi optional: "" / "None" → None, số → str
+    for field in ("approver_org_id", "verifier_org_id", "submission_deadline",
+                  "approved_decision_number", "approved_decision_date",
+                  "settlement_number", "project_name", "contract_group",
+                  "attached_forms", "created_at"):
+        v = out.get(field)
+        if v in ("", "None"):
+            out[field] = None
+        elif v is not None and not isinstance(v, str):
+            out[field] = str(v)
+
+    # 5. Status rỗng (bản ghi cũ ghi thiếu) → PREPARING
+    if not str(out.get("status", "")).strip():
+        out["status"] = "PREPARING"
+    return out
+
+
+def _sanitize_warning(r: dict) -> dict:
+    """Chuẩn hoá record cảnh báo từ Sheets (int → str, empty → default)."""
+    out = dict(r)
+    for field in ("id", "contract_id", "sent_date", "response_deadline",
+                  "mau_02_qtda_url", "created_at"):
+        v = out.get(field)
+        if v is not None and not isinstance(v, str):
+            out[field] = str(v)
+    try:
+        out["warning_number"] = int(out.get("warning_number") or 1)
+    except (ValueError, TypeError):
+        out["warning_number"] = 1
+    if not str(out.get("contractor_response_status", "")).strip():
+        out["contractor_response_status"] = "NO_RESPONSE"
+    v = out.get("is_delivered")
+    out["is_delivered"] = str(v).strip().upper() in ("TRUE", "1", "YES")
     return out
 
 
@@ -208,9 +294,17 @@ _ACTIVE_STATUSES = {"PREPARING", "AUDITED", "APPROVED"}
 async def create_settlement(body: SettlementCreate, _: dict = Depends(get_current_user)):
     existing = sm.read_where("project_settlements", project_id=body.project_id)
     # Chỉ block khi có bản ghi active thực sự (bỏ qua empty/corrupt status)
-    if any(s.get("status", "") in _ACTIVE_STATUSES for s in existing):
+    if any(str(s.get("status", "")).strip() in _ACTIVE_STATUSES for s in existing):
         raise HTTPException(400, "Dự án đã có hồ sơ quyết toán đang xử lý")
-    record = sm.insert("project_settlements", body.model_dump())
+    data = body.model_dump()
+    data["status"] = "PREPARING"  # ghi rõ trạng thái ban đầu vào sheet
+    # Đảm bảo cột mới attached_forms tồn tại (trường hợp SKIP_MIGRATION=true)
+    if data.get("attached_forms") and "attached_forms" not in sm.get_col_map("project_settlements"):
+        try:
+            sm.migrate_schema("project_settlements")
+        except Exception:
+            pass
+    record = sm.insert("project_settlements", data)
     return Settlement(**_sanitize_record(record))
 
 
@@ -219,7 +313,7 @@ async def get_settlement(settlement_id: str, _: dict = Depends(get_current_user)
     r = sm.read_by_id("project_settlements", settlement_id)
     if not r:
         raise HTTPException(404, "Không tìm thấy hồ sơ quyết toán")
-    return Settlement(**r)
+    return Settlement(**_sanitize_record(r))
 
 
 @router.put("/{settlement_id}/audit")

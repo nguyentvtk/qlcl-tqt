@@ -29,7 +29,7 @@ if _creds_env and not os.path.isfile(GOOGLE_CREDENTIALS_FILE):
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production-use-long-random-string")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_HOURS = 8
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "72"))  # mặc định 72h, override qua env
 
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
 

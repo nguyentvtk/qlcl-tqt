@@ -134,11 +134,24 @@ async def register(body: UserCreate):
 @router.get("/me", response_model=User)
 async def me(current_user: dict = Depends(get_current_user)):
     # Thử sheet users trước
-    users = sm.read_where("users", email=current_user["email"])
+    try:
+        users = sm.read_where("users", email=current_user.get("email", ""))
+    except Exception:
+        users = []
     if users:
         u = users[0]
-        u.pop("password_hash", None)
-        return User(**u)
+        # Google Sheets trả ô số dạng int → phải ép str (Pydantic v2 không tự coerce)
+        return User(
+            id=str(u.get("id", "")),
+            organization_id=str(u.get("organization_id", "")),
+            full_name=str(u.get("full_name", "")),
+            email=str(u.get("email", "")),
+            phone=str(u.get("phone", "")),
+            role=str(u.get("role", "PROJECT_MANAGEMENT")),
+            professional_certificate_code=(str(u["professional_certificate_code"])
+                                           if u.get("professional_certificate_code") else None),
+            created_at=str(u["created_at"]) if u.get("created_at") else None,
+        )
 
     # Fallback: dùng thông tin trong JWT (đăng nhập qua sheet Nhân sự)
     return User(
