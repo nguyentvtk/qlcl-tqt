@@ -79,31 +79,61 @@ SHEET_SCHEMAS: dict[str, list[str]] = {
         "id", "dossier_id", "requested_by", "requested_at",
         "deadline_at", "completed_at", "is_overdue", "created_at"
     ],
+    "field_reports": [
+        "id", "project_id", "construction_id", "phase", "report_date",
+        "location", "content", "conclusion", "participants",
+        "pdf_url", "video_urls", "created_by", "created_at"
+    ],
 }
 
-# Master data mặc định cho dossier_groups
+# Master data mặc định cho dossier_groups — theo 4 giai đoạn dự án (NĐ 207/2026/NĐ-CP)
 DEFAULT_DOSSIER_GROUPS = [
-    {"id": "1", "code": "I", "name": "Nhóm I – Hồ sơ pháp lý và thiết kế"},
-    {"id": "2", "code": "II", "name": "Nhóm II – Hồ sơ thi công"},
-    {"id": "3", "code": "III", "name": "Nhóm III – Hồ sơ nghiệm thu & hoàn công"},
+    {"id": "1", "code": "I",   "name": "Nhóm I – Pháp lý & chuẩn bị đầu tư (GĐ1)"},
+    {"id": "2", "code": "II",  "name": "Nhóm II – Quản lý chất lượng thi công (GĐ2-3)"},
+    {"id": "3", "code": "III", "name": "Nhóm III – Nghiệm thu & hoàn công (GĐ3)"},
+    {"id": "4", "code": "IV",  "name": "Nhóm IV – LCNT & khởi công xây dựng (GĐ2)"},
+    {"id": "5", "code": "V",   "name": "Nhóm V – Thanh toán & quyết toán (GĐ4)"},
 ]
 
 # Master data mặc định cho dossier_templates
+# Danh mục theo NĐ 207/2026/NĐ-CP (hồ sơ hoàn thành công trình, khởi công Đ.48,
+# nghiệm thu Đ.57, bàn giao Đ.58) + TT 73/2026/TT-BTC (quyết toán)
 DEFAULT_DOSSIER_TEMPLATES = [
-    # Nhóm I
+    # Nhóm I — GĐ1 Chuẩn bị đầu tư
     {"id": "1", "group_id": "1", "item_index": "1", "name": "Quyết định phê duyệt dự án đầu tư", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
     {"id": "2", "group_id": "1", "item_index": "2", "name": "Hồ sơ thiết kế bản vẽ thi công được duyệt", "required_for_all": "TRUE", "default_uploader_role": "DESIGN_CONTRACTOR"},
     {"id": "3", "group_id": "1", "item_index": "3", "name": "Giấy phép xây dựng (nếu có)", "required_for_all": "FALSE", "default_uploader_role": "PROJECT_MANAGEMENT"},
-    # Nhóm II
+    {"id": "12", "group_id": "1", "item_index": "4", "name": "Quyết định phê duyệt chủ trương đầu tư", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "13", "group_id": "1", "item_index": "5", "name": "Báo cáo khảo sát xây dựng được nghiệm thu", "required_for_all": "TRUE", "default_uploader_role": "SURVEY_CONTRACTOR"},
+    {"id": "14", "group_id": "1", "item_index": "6", "name": "Dự toán xây dựng được phê duyệt", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "15", "group_id": "1", "item_index": "7", "name": "Hồ sơ môi trường / PCCC được thẩm duyệt (nếu có)", "required_for_all": "FALSE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    # Nhóm II — GĐ2-3 Quản lý chất lượng thi công
     {"id": "4", "group_id": "2", "item_index": "1", "name": "Nhật ký thi công", "required_for_all": "TRUE", "default_uploader_role": "CONSTRUCTION_CONTRACTOR"},
     {"id": "5", "group_id": "2", "item_index": "2", "name": "Biên bản kiểm tra vật liệu đầu vào", "required_for_all": "TRUE", "default_uploader_role": "CONSTRUCTION_CONTRACTOR"},
     {"id": "6", "group_id": "2", "item_index": "3", "name": "Kết quả thí nghiệm vật liệu", "required_for_all": "TRUE", "default_uploader_role": "CONSTRUCTION_CONTRACTOR"},
     {"id": "7", "group_id": "2", "item_index": "4", "name": "Biên bản nghiệm thu công việc xây dựng", "required_for_all": "TRUE", "default_uploader_role": "SUPERVISION_CONTRACTOR"},
     {"id": "8", "group_id": "2", "item_index": "5", "name": "Bản vẽ hoàn công", "required_for_all": "TRUE", "default_uploader_role": "CONSTRUCTION_CONTRACTOR"},
-    # Nhóm III
+    {"id": "16", "group_id": "2", "item_index": "6", "name": "Biện pháp thi công & kế hoạch an toàn được chấp thuận (Đ.51 Luật XD)", "required_for_all": "TRUE", "default_uploader_role": "CONSTRUCTION_CONTRACTOR"},
+    {"id": "17", "group_id": "2", "item_index": "7", "name": "Biên bản hiện trường / biên bản xử lý kỹ thuật", "required_for_all": "FALSE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    # Nhóm III — GĐ3 Nghiệm thu & hoàn công
     {"id": "9", "group_id": "3", "item_index": "1", "name": "Biên bản nghiệm thu bộ phận công trình", "required_for_all": "TRUE", "default_uploader_role": "SUPERVISION_CONTRACTOR"},
     {"id": "10", "group_id": "3", "item_index": "2", "name": "Biên bản nghiệm thu hoàn thành hạng mục công trình", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
     {"id": "11", "group_id": "3", "item_index": "3", "name": "Biên bản nghiệm thu hoàn thành công trình đưa vào sử dụng", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "18", "group_id": "3", "item_index": "4", "name": "Văn bản chấp thuận kết quả nghiệm thu của cơ quan chuyên môn (Đ.57 NĐ 207)", "required_for_all": "FALSE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "19", "group_id": "3", "item_index": "5", "name": "Biên bản bàn giao công trình đưa vào sử dụng (Đ.58 NĐ 207)", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "20", "group_id": "3", "item_index": "6", "name": "Hồ sơ hoàn thành công trình (Đ.42 NĐ 207)", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    # Nhóm IV — GĐ2 LCNT & khởi công
+    {"id": "21", "group_id": "4", "item_index": "1", "name": "Kế hoạch lựa chọn nhà thầu được phê duyệt", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "22", "group_id": "4", "item_index": "2", "name": "Quyết định phê duyệt kết quả lựa chọn nhà thầu", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "23", "group_id": "4", "item_index": "3", "name": "Hợp đồng xây dựng & bảo đảm thực hiện hợp đồng", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "24", "group_id": "4", "item_index": "4", "name": "Thông báo khởi công xây dựng (Đ.48 Luật XD)", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "25", "group_id": "4", "item_index": "5", "name": "Biên bản bàn giao mặt bằng thi công", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    # Nhóm V — GĐ4 Thanh toán & quyết toán
+    {"id": "26", "group_id": "5", "item_index": "1", "name": "Hồ sơ thanh toán khối lượng hoàn thành (Mẫu 03A/04A)", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "27", "group_id": "5", "item_index": "2", "name": "Biên bản nghiệm thu thanh lý hợp đồng", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "28", "group_id": "5", "item_index": "3", "name": "Báo cáo quyết toán Mẫu 01–07/QTDA (TT 73/2026/TT-BTC)", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "29", "group_id": "5", "item_index": "4", "name": "Báo cáo kiểm toán độc lập (nếu có)", "required_for_all": "FALSE", "default_uploader_role": "PROJECT_MANAGEMENT"},
+    {"id": "30", "group_id": "5", "item_index": "5", "name": "Quyết định phê duyệt quyết toán (Mẫu 10/QTDA)", "required_for_all": "TRUE", "default_uploader_role": "PROJECT_MANAGEMENT"},
 ]
 
 ROLES = [

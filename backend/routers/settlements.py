@@ -156,9 +156,20 @@ SETTLEMENT_FORM_TEMPLATES = [
     {"code": "07/QTDA", "name": "Tình hình công nợ của dự án", "required_for_completed": True},
     {"code": "08/QTDA", "name": "Báo cáo QT dùng cho dự án quy hoạch/chuẩn bị đầu tư/dừng thực hiện chưa có khối lượng", "required_for_completed": False},
     {"code": "09/QTDA", "name": "Báo cáo kết quả phê duyệt tổng quyết toán dự án quan trọng quốc gia", "required_for_completed": False},
-    {"code": "10/QTDA", "name": "Quyết định phê duyệt quyết toán vốn đầu tư", "required_for_completed": False},
+    {"code": "10/QTDA", "name": "Quyết định phê duyệt quyết toán vốn đầu tư (dự án, DATP, tiểu DA độc lập, công trình, HMCT độc lập)", "required_for_completed": False},
     {"code": "11/QTDA", "name": "Báo cáo tình hình quyết toán dự án sử dụng vốn đầu tư công trong năm", "required_for_completed": False},
-    {"code": "12/QTDA", "name": "Phiếu giao nhận hồ sơ quyết toán vốn đầu tư dự án", "required_for_completed": True},
+    # Điều 4.6 TT 73/2026: Mẫu 12 dùng khi GIAO NHẬN hồ sơ trực tiếp — không thuộc bộ mẫu bắt buộc 01–07
+    {"code": "12/QTDA", "name": "Phiếu giao nhận hồ sơ quyết toán (dùng khi nộp hồ sơ trực tiếp)", "required_for_completed": False},
+]
+
+# Mẫu biểu quyết toán THEO NIÊN ĐỘ (năm ngân sách) — TT 91/2025/TT-BTC
+# (phần này của TT 91/2025 VẪN CÒN HIỆU LỰC; TT 73/2026 chỉ bãi bỏ phần mẫu QTDA cũ)
+NIENDO_FORM_TEMPLATES = [
+    {"code": "01/QTNĐ", "name": "Báo cáo quyết toán vốn ĐTC nguồn NSNN theo năm ngân sách (bộ, cơ quan TW, chủ đầu tư)"},
+    {"code": "02/QTNĐ", "name": "Báo cáo thực hiện vốn đầu tư các dự án quan trọng quốc gia sử dụng vốn NSNN"},
+    {"code": "03/QTNĐ", "name": "Báo cáo chi tiết quyết toán vốn ĐTC nguồn NSNN theo năm (cơ quan thanh toán)"},
+    {"code": "04/QTNĐ", "name": "Thông báo xét duyệt quyết toán vốn ĐTC theo năm (cơ quan cấp trên của CĐT)"},
+    {"code": "05/QTNĐ", "name": "Văn bản kiểm tra quyết toán vốn ĐTC theo năm (cơ quan tài chính)"},
 ]
 
 
@@ -292,14 +303,22 @@ async def project_summary(project_id: str, _: dict = Depends(get_current_user)):
 @router.get("/templates")
 async def list_settlement_templates(_: dict = Depends(get_current_user)):
     """
-    Danh mục 12 mẫu biểu quyết toán vốn đầu tư dự án (TT 73/2026/TT-BTC).
-    Dự án hoàn thành / dừng thực hiện đã có khối lượng nghiệm thu: Mẫu 01–07 (+12).
-    Dự án quy hoạch / chuẩn bị đầu tư / dừng chưa có khối lượng: Mẫu 03, 07, 08.
+    Danh mục mẫu biểu quyết toán theo quy định hiện hành:
+    - QTDA (quyết toán vốn đầu tư DỰ ÁN): TT 73/2026/TT-BTC, hiệu lực 01/7/2026.
+      Dự án hoàn thành / dừng có khối lượng nghiệm thu: Mẫu 01–07 (Điều 4.1).
+      Dự án quy hoạch / chuẩn bị đầu tư / dừng chưa có khối lượng: Mẫu 03, 07, 08 (Điều 4.2).
+      Mẫu 12: phiếu giao nhận khi nộp hồ sơ trực tiếp (Điều 4.6).
+    - QTNĐ (quyết toán theo NIÊN ĐỘ ngân sách): TT 91/2025/TT-BTC Điều 3 — còn hiệu lực
+      (TT 73/2026 chỉ bãi bỏ k2 Đ1, Đ4, k2 Đ5 của TT 91/2025).
+    - Chuyển tiếp: hồ sơ đã nộp cơ quan thẩm tra trước 01/7/2026 giữ mẫu cũ, không lập lại.
     """
     return {
         "circular": "Thông tư 73/2026/TT-BTC ngày 25/6/2026 của Bộ Tài chính",
         "decree": "Nghị định 193/2026/NĐ-CP",
         "templates": SETTLEMENT_FORM_TEMPLATES,
+        "niendo_circular": "Thông tư 91/2025/TT-BTC (phần quyết toán theo niên độ — còn hiệu lực)",
+        "niendo_templates": NIENDO_FORM_TEMPLATES,
+        "transition_note": "Hồ sơ quyết toán đã nộp cơ quan chủ trì thẩm tra trước 01/7/2026 áp dụng mẫu biểu TT 91/2025, không phải lập lại theo TT 73/2026 (khoản 5 Điều 5 TT 73/2026).",
     }
 
 

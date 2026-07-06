@@ -140,8 +140,11 @@ export async function renderSettlements(container) {
               📋 Mẫu biểu quyết toán kèm theo hồ sơ (Thông tư 73/2026/TT-BTC — Bộ Tài chính)
             </label>
             <div class="alert alert-info" style="margin-bottom:8px;font-size:12px">
-              Dự án hoàn thành / dừng thực hiện đã có khối lượng nghiệm thu: bắt buộc Mẫu 01–07 và Phiếu giao nhận (Mẫu 12).
-              Dự án quy hoạch / chuẩn bị đầu tư: dùng Mẫu 03, 07, 08.
+              <strong>Điều 4 TT 73/2026:</strong> Dự án hoàn thành / dừng có khối lượng nghiệm thu: bắt buộc <strong>Mẫu 01–07</strong>.
+              Dự án quy hoạch / chuẩn bị đầu tư / dừng chưa có khối lượng: Mẫu 03, 07, 08.
+              Mẫu 12 dùng khi <em>nộp hồ sơ trực tiếp</em>.<br>
+              <strong>Chuyển tiếp:</strong> hồ sơ đã nộp thẩm tra trước 01/7/2026 giữ mẫu TT 91/2025, không lập lại.
+              Quyết toán theo <em>niên độ ngân sách</em> vẫn dùng Mẫu 01–05/QTNĐ (TT 91/2025 còn hiệu lực phần này).
             </div>
             <div id="sm-forms" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px">
               Đang tải danh mục mẫu biểu...
@@ -289,7 +292,7 @@ const DEFAULT_FORM_TEMPLATES = [
   { code: '09/QTDA', name: 'Báo cáo kết quả phê duyệt tổng QT dự án quan trọng quốc gia', required_for_completed: false },
   { code: '10/QTDA', name: 'Quyết định phê duyệt quyết toán vốn đầu tư', required_for_completed: false },
   { code: '11/QTDA', name: 'Báo cáo tình hình QT dự án sử dụng vốn đầu tư công trong năm', required_for_completed: false },
-  { code: '12/QTDA', name: 'Phiếu giao nhận hồ sơ quyết toán vốn đầu tư dự án', required_for_completed: true },
+  { code: '12/QTDA', name: 'Phiếu giao nhận hồ sơ quyết toán (dùng khi nộp trực tiếp)', required_for_completed: false },
 ];
 let _formTemplates = DEFAULT_FORM_TEMPLATES;
 

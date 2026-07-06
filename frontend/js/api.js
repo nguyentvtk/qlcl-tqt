@@ -117,6 +117,12 @@ export const contracts = {
   slaOverdue: () => get('/api/v1/contracts/payments/sla-overdue'),
 };
 
+// ─── Biên bản hiện trường ─────────────────────────────────────────
+export const fieldReports = {
+  list: (projectId) => get(`/api/v1/field-reports${projectId ? '?project_id=' + encodeURIComponent(projectId) : ''}`),
+  create: (formData) => postForm('/api/v1/field-reports', formData),
+};
+
 // ─── Liên kết CPM5.0 ──────────────────────────────────────────────
 export const CPM_URL = 'https://cpmtanphu.vercel.app';
 export const cpm = {

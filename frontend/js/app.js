@@ -11,6 +11,7 @@ import { renderConstructions } from './modules/constructions.js';
 import { renderDossiers } from './modules/dossiers.js';
 import { renderContracts } from './modules/contracts.js';
 import { renderSettlements } from './modules/settlements.js';
+import { renderFieldReports } from './modules/fieldreports.js';
 
 const PAGES = {
   dashboard:     { title: 'Dashboard', icon: '📊', render: renderDashboard },
@@ -20,6 +21,7 @@ const PAGES = {
   dossiers:      { title: 'Hồ sơ & Nghiệm thu', icon: '📁', render: renderDossiers },
   contracts:     { title: 'Hợp đồng & Thanh toán', icon: '💰', render: renderContracts },
   settlements:   { title: 'Quyết toán', icon: '📋', render: renderSettlements },
+  fieldreports:  { title: 'Biên bản hiện trường', icon: '📝', render: renderFieldReports },
 };
 
 let _currentUser = null;

@@ -377,12 +377,20 @@ window.checkDrive = async function() {
   }
 };
 
-// Gợi ý giai đoạn theo nhóm hồ sơ: Nhóm I → GĐ1, Nhóm II → GĐ2, Nhóm III → GĐ3
+// Gợi ý giai đoạn theo nhóm hồ sơ (NĐ 207/2026):
+// Nhóm I → GĐ1 Chuẩn bị đầu tư | Nhóm IV → GĐ2 LCNT & khởi công
+// Nhóm II → GĐ2 Thi công | Nhóm III → GĐ3 Nghiệm thu | Nhóm V → GĐ4 Quyết toán
 window.suggestPhase = function() {
   const tplId = document.getElementById('d-template')?.value;
   const tpl = _templates.find(t => String(t.id) === String(tplId));
   const groupCode = tpl?.group?.code || '';
-  const map = { 'I': '01_ChuanBiDauTu', 'II': '02_ThucHienDauTu', 'III': '03_NghiemThuHoanCong' };
+  const map = {
+    'I':   '01_ChuanBiDauTu',
+    'IV':  '02_ThucHienDauTu',
+    'II':  '02_ThucHienDauTu',
+    'III': '03_NghiemThuHoanCong',
+    'V':   '04_QuyetToan',
+  };
   const phaseSel = document.getElementById('d-phase');
   if (phaseSel && map[groupCode]) phaseSel.value = map[groupCode];
 };

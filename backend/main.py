@@ -29,6 +29,7 @@ from routers import (
     contracts as contract_router,
     settlements as settlement_router,
     cpm as cpm_router,
+    field_reports as field_report_router,
 )
 
 @asynccontextmanager
@@ -93,6 +94,7 @@ app.include_router(dossier_router.router)
 app.include_router(contract_router.router)
 app.include_router(settlement_router.router)
 app.include_router(cpm_router.router)
+app.include_router(field_report_router.router)
 
 
 # ─── As-Built Stamp Overlay ──────────────────────────────────────

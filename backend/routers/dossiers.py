@@ -96,32 +96,45 @@ def _resolve_drive_folder(construction_id: str, phase: str, submission_round: st
 # ─── Dossier Templates (master data) ────────────────────────────
 @router.get("/templates")
 async def list_templates(_: dict = Depends(get_current_user)):
+    # Đồng bộ master data: seed các template/group CÒN THIẾU theo id
+    # (chạy được cả khi sheet trống lẫn khi nâng cấp thêm danh mục mới)
     templates = sm.read_all("dossier_templates")
-    if not templates:
-        # Sheet trống (SKIP_MIGRATION=true nên startup không seed) → seed ngay
+    existing_ids = {str(t.get("id")) for t in templates}
+    missing = [t for t in DEFAULT_DOSSIER_TEMPLATES if str(t["id"]) not in existing_ids]
+    if missing:
         try:
-            for t in DEFAULT_DOSSIER_TEMPLATES:
+            for t in missing:
                 sm.insert("dossier_templates", dict(t))
             templates = sm.read_all("dossier_templates")
         except Exception:
-            pass
-        if not templates:  # Sheets lỗi → vẫn trả về danh mục mặc định trong bộ nhớ
-            templates = [dict(t) for t in DEFAULT_DOSSIER_TEMPLATES]
+            templates = templates + [dict(t) for t in missing]
+    if not templates:  # Sheets lỗi hoàn toàn → dùng danh mục mặc định trong bộ nhớ
+        templates = [dict(t) for t in DEFAULT_DOSSIER_TEMPLATES]
 
-    groups = {str(g.get("id")): g for g in sm.read_all("dossier_groups")}
-    if not groups:
+    groups_list = sm.read_all("dossier_groups")
+    group_ids = {str(g.get("id")) for g in groups_list}
+    missing_g = [g for g in DEFAULT_DOSSIER_GROUPS if str(g["id"]) not in group_ids]
+    if missing_g:
         try:
-            for g in DEFAULT_DOSSIER_GROUPS:
+            for g in missing_g:
                 sm.insert("dossier_groups", dict(g))
-            groups = {str(g.get("id")): g for g in sm.read_all("dossier_groups")}
+            groups_list = sm.read_all("dossier_groups")
         except Exception:
-            pass
-        if not groups:
-            groups = {str(g["id"]): dict(g) for g in DEFAULT_DOSSIER_GROUPS}
+            groups_list = groups_list + [dict(g) for g in missing_g]
+    if not groups_list:
+        groups_list = [dict(g) for g in DEFAULT_DOSSIER_GROUPS]
 
+    groups = {str(g.get("id")): g for g in groups_list}
     for t in templates:
         t["group"] = groups.get(str(t.get("group_id")), {})
-    return templates
+
+    # Sắp xếp theo nhóm rồi theo số thứ tự
+    def _key(t):
+        try:
+            return (int(str(t.get("group_id") or 0)), int(str(t.get("item_index") or 0)))
+        except (ValueError, TypeError):
+            return (99, 99)
+    return sorted(templates, key=_key)
 
 
 @router.get("/groups")
