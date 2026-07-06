@@ -135,6 +135,36 @@ async def update_warning_response(
     return updated
 
 
+# ─── Sanitize helper ───────────────────────────────────────────────
+def _sanitize_record(r: dict) -> dict:
+    """
+    Chuyển empty string từ Google Sheets → None/0 cho các trường số
+    để tránh Pydantic v2 raise ValidationError khi float("") fails.
+    """
+    out = dict(r)
+    # Trường Optional[float]: empty → None
+    for field in ("audited_amount", "approved_amount"):
+        v = out.get(field)
+        if v == "" or v is None:
+            out[field] = None
+        else:
+            try:
+                out[field] = float(str(v).replace(",", ".").strip())
+            except (ValueError, TypeError):
+                out[field] = None
+    # Trường float = 0: empty → 0
+    for field in ("proposed_settlement_amount",):
+        v = out.get(field)
+        if v == "" or v is None:
+            out[field] = 0.0
+        else:
+            try:
+                out[field] = float(str(v).replace(",", ".").strip())
+            except (ValueError, TypeError):
+                out[field] = 0.0
+    return out
+
+
 # ─── Project Settlements ────────────────────────────────────────────
 
 @router.get("", response_model=list[Settlement])
@@ -153,14 +183,14 @@ async def list_settlements(
             result.append(s)
             seen_ids.add(s.id)
 
-    # 2. App-created settlements
+    # 2. App-created settlements — sanitize trước khi parse
     app_records = (
         sm.read_where("project_settlements", project_id=project_id)
         if project_id else sm.read_all("project_settlements")
     )
     for r in app_records:
         try:
-            s = Settlement(**r)
+            s = Settlement(**_sanitize_record(r))
             if s.id not in seen_ids:
                 result.append(s)
                 seen_ids.add(s.id)
@@ -170,13 +200,18 @@ async def list_settlements(
     return result
 
 
+# Tập trạng thái "đang hoạt động" → block tạo mới
+_ACTIVE_STATUSES = {"PREPARING", "AUDITED", "APPROVED"}
+
+
 @router.post("", response_model=Settlement, status_code=201)
 async def create_settlement(body: SettlementCreate, _: dict = Depends(get_current_user)):
     existing = sm.read_where("project_settlements", project_id=body.project_id)
-    if existing and any(s["status"] not in ("REJECTED",) for s in existing):
+    # Chỉ block khi có bản ghi active thực sự (bỏ qua empty/corrupt status)
+    if any(s.get("status", "") in _ACTIVE_STATUSES for s in existing):
         raise HTTPException(400, "Dự án đã có hồ sơ quyết toán đang xử lý")
     record = sm.insert("project_settlements", body.model_dump())
-    return Settlement(**record)
+    return Settlement(**_sanitize_record(record))
 
 
 @router.get("/{settlement_id}", response_model=Settlement)
