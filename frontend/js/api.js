@@ -120,6 +120,7 @@ export const contracts = {
 export const settlements = {
   list: (projectId) => get(`/api/v1/settlements${projectId ? '?project_id=' + projectId : ''}`),
   templates: () => get('/api/v1/settlements/templates'),
+  projectSummary: (projectId) => get(`/api/v1/settlements/project-summary?project_id=${encodeURIComponent(projectId)}`),
   get: (id) => get(`/api/v1/settlements/${id}`),
   create: (data) => post('/api/v1/settlements', data),
   audit: (id, amount) => put(`/api/v1/settlements/${id}/audit?audited_amount=${amount}`, {}),

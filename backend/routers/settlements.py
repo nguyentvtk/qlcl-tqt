@@ -162,6 +162,133 @@ SETTLEMENT_FORM_TEMPLATES = [
 ]
 
 
+# ─── Tổng hợp dữ liệu dự án phục vụ lập & xem biểu mẫu quyết toán ──
+def _build_project_summary(project_code: str) -> dict:
+    """
+    Gom dữ liệu từ các sheet gốc theo Mã DA:
+    - "Dự án": thông tin chung, tổng mức đầu tư, số giải ngân
+    - "Hợp đồng": danh mục HĐ (Mẫu 02), giá QT/lũy kế thanh toán, công nợ (Mẫu 07)
+    - "Gói thầu": số lượng gói thầu
+    - "Nghiệm thu": giá trị nghiệm thu (Mẫu 04)
+    Số tiền đề xuất: Giá QT HĐ → thiếu thì Lũy kế TT → fallback tổng NT / Số giải ngân.
+    """
+    pc = str(project_code).strip()
+
+    # 1. Dự án
+    project = {}
+    for r in sm.read_sheet_by_name_raw("Dự án"):
+        if str(r.get("Mã DA", "")).strip() == pc:
+            project = {
+                "project_code": pc,
+                "name": str(r.get("Tên dự án", "")).strip(),
+                "project_type": str(r.get("Loại Dự án", "")).strip(),
+                "status": str(r.get("Trạng thái dự án", "")).strip(),
+                "total_investment": sm.parse_vn_number(r.get("Tổng mức đầu tư (đ)", 0)),
+                "disbursed_amount": sm.parse_vn_number(r.get("Số giải ngân", 0)),
+                "start_date": str(r.get("Ngày bắt đầu", "")).strip(),
+                "end_date": str(r.get("Ngày kết thúc", "")).strip(),
+            }
+            break
+
+    # 2. Hợp đồng
+    contracts = []
+    total_contract_value = total_settlement_value = total_paid = 0.0
+    proposed_from_contracts = 0.0
+    for r in sm.read_sheet_by_name_raw("Hợp đồng"):
+        if str(r.get("Mã DA", "")).strip() != pc:
+            continue
+        gia_hd  = sm.parse_vn_number(r.get("Giá HĐ/Trúng thầu", 0))
+        gia_qt  = sm.parse_vn_number(r.get("Giá quyết toán", 0))
+        luy_ke  = sm.parse_vn_number(r.get("Lũy kế thanh toán", 0))
+        # Ưu tiên Giá QT; HĐ chưa có giá QT → dùng Lũy kế thanh toán
+        proposed_from_contracts += gia_qt if gia_qt else luy_ke
+        contracts.append({
+            "contract_number": str(r.get("Mã HĐ", "")).strip(),
+            "contract_name": str(r.get("Tên HĐ", "")).strip(),
+            "contractor_name": str(r.get("Nhà thầu", "")).strip(),
+            "sign_date": str(r.get("Ngày ký", "")).strip(),
+            "contract_value": gia_hd,
+            "settlement_value": gia_qt,
+            "paid_amount": luy_ke,
+            "debt": round((gia_qt or gia_hd) - luy_ke, 2),  # công nợ: còn phải trả (+) / trả thừa (−)
+            "status": str(r.get("Trạng thái HĐ", "")).strip(),
+        })
+        total_contract_value += gia_hd
+        total_settlement_value += gia_qt
+        total_paid += luy_ke
+
+    # 3. Gói thầu
+    bid_packages = [
+        {
+            "code": str(r.get("Mã GT", "")).strip(),
+            "name": str(r.get("Tên gói thầu", "")).strip(),
+            "price": sm.parse_vn_number(r.get("Giá gói thầu", 0)),
+            "status": str(r.get("Trạng thái GT", "")).strip(),
+        }
+        for r in sm.read_sheet_by_name_raw("Gói thầu")
+        if str(r.get("Mã DA", "")).strip() == pc
+    ]
+
+    # 4. Nghiệm thu
+    acceptances = []
+    total_accepted = 0.0
+    for r in sm.read_sheet_by_name_raw("Nghiệm thu"):
+        if str(r.get("Mã DA", "")).strip() != pc:
+            continue
+        gia_nt = sm.parse_vn_number(r.get("Giá trị NT", 0))
+        acceptances.append({
+            "contract_number": str(r.get("Mã HĐ", "")).strip(),
+            "round": str(r.get("Lần NT", "")).strip(),
+            "request_date": str(r.get("Ngày đề nghị", "")).strip(),
+            "amount": gia_nt,
+            "status": str(r.get("Trạng thái HSNT", "")).strip(),
+            "contractor_name": str(r.get("Nhà thầu", "")).strip(),
+        })
+        total_accepted += gia_nt
+
+    # 5. Số tiền đề nghị quyết toán đề xuất
+    if proposed_from_contracts > 0:
+        suggested, source = proposed_from_contracts, "Tổng Giá quyết toán các HĐ (HĐ thiếu giá QT dùng Lũy kế thanh toán)"
+    elif total_accepted > 0:
+        suggested, source = total_accepted, "Tổng giá trị nghiệm thu (chưa có số liệu hợp đồng)"
+    elif project.get("disbursed_amount"):
+        suggested, source = project["disbursed_amount"], "Số giải ngân của dự án (chưa có số liệu HĐ/nghiệm thu)"
+    else:
+        suggested, source = 0.0, "Không tìm thấy số liệu — vui lòng nhập thủ công"
+
+    return {
+        "project": project,
+        "contracts": contracts,
+        "bid_packages": bid_packages,
+        "acceptances": acceptances,
+        "totals": {
+            "contract_value": round(total_contract_value, 2),
+            "settlement_value": round(total_settlement_value, 2),
+            "paid_amount": round(total_paid, 2),
+            "accepted_amount": round(total_accepted, 2),
+            "debt": round((total_settlement_value or total_contract_value) - total_paid, 2),
+        },
+        "suggested_amount": round(suggested, 2),
+        "suggested_source": source,
+    }
+
+
+@router.get("/project-summary")
+async def project_summary(project_id: str, _: dict = Depends(get_current_user)):
+    """
+    Tổng hợp dữ liệu dự án từ các sheet Dự án / Hợp đồng / Gói thầu / Nghiệm thu
+    để tự điền số tiền đề nghị quyết toán và điền số liệu vào biểu mẫu QTDA.
+    project_id = Mã DA (vd: DA-001).
+    """
+    summary = _build_project_summary(project_id)
+    if not summary["project"] and not summary["contracts"]:
+        # Thử tra project app-created để lấy project_code
+        r = sm.read_by_id("projects", project_id)
+        if r and r.get("project_code"):
+            summary = _build_project_summary(str(r["project_code"]))
+    return summary
+
+
 @router.get("/templates")
 async def list_settlement_templates(_: dict = Depends(get_current_user)):
     """

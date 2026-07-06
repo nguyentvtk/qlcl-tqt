@@ -104,11 +104,11 @@ export async function renderSettlements(container) {
           <div class="form-grid">
             <div class="form-group">
               <label>Dự án *</label>
-              <select id="sm-project" onchange="autoDeadline()"></select>
+              <select id="sm-project" onchange="onSettProjectChange()"></select>
             </div>
             <div class="form-group">
               <label>Nhóm dự án (để tính deadline)</label>
-              <select id="sm-group">
+              <select id="sm-group" onchange="autoDeadline()">
                 <option value="">-- Chọn nhóm --</option>
                 <option value="C">Nhóm C — 6 tháng</option>
                 <option value="B">Nhóm B — 9 tháng</option>
@@ -118,6 +118,7 @@ export async function renderSettlements(container) {
             <div class="form-group">
               <label>Số tiền đề nghị quyết toán (VNĐ) *</label>
               <input id="sm-amount" type="number" placeholder="0" />
+              <div id="sm-amount-hint" style="font-size:11px;color:#6b7280;margin-top:4px"></div>
             </div>
             <div class="form-group">
               <label>Deadline nộp quyết toán</label>
@@ -202,6 +203,22 @@ export async function renderSettlements(container) {
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="closeModal('approve-modal')">Hủy</button>
           <button class="btn btn-success" onclick="submitApprove()">✓ Phê duyệt</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Modal: Xem biểu mẫu quyết toán ─── -->
+    <div class="modal-overlay hidden" id="forms-modal">
+      <div class="modal" style="max-width:900px;width:95%">
+        <div class="modal-header">
+          <h3>👁 Biểu mẫu quyết toán (Thông tư 73/2026/TT-BTC)</h3>
+          <button class="modal-close" onclick="closeModal('forms-modal')">✕</button>
+        </div>
+        <div class="modal-body" id="forms-modal-body" style="max-height:70vh;overflow-y:auto">
+          Đang tải...
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('forms-modal')">Đóng</button>
         </div>
       </div>
     </div>
@@ -332,6 +349,7 @@ async function loadSettlements() {
         <td style="white-space:nowrap">
           ${canAudit   ? `<button class="btn btn-primary btn-sm" onclick="openAuditModal('${esc(s.id)}')">🔍 Kiểm toán</button> ` : ''}
           ${canApprove ? `<button class="btn btn-success btn-sm" onclick="openApproveModal('${esc(s.id)}')">✓ Phê duyệt</button> ` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="viewForms('${esc(s.id)}')" title="Xem biểu mẫu quyết toán">👁 Xem</button>
           <button class="btn btn-secondary btn-sm" onclick="viewPenalty('${esc(s.id)}')">💸 Phạt</button>
         </td>
       </tr>`;
@@ -433,7 +451,40 @@ window.openSettModal = function() {
   document.getElementById('sm-group').value = '';
   document.getElementById('sm-deadline').value = '';
   document.getElementById('sett-modal-err').style.display = 'none';
+  const hint = document.getElementById('sm-amount-hint');
+  if (hint) hint.textContent = '';
   renderFormChecklist(); // reset checklist mẫu biểu về mặc định (Mẫu 01–07, 12)
+};
+
+// Cache tổng hợp dữ liệu dự án (dùng chung cho autofill + xem biểu mẫu)
+const _summaryCache = {};
+
+async function getProjectSummary(projectId) {
+  if (!_summaryCache[projectId]) {
+    _summaryCache[projectId] = await settlements.projectSummary(projectId);
+  }
+  return _summaryCache[projectId];
+}
+
+// Khi chọn dự án: tính deadline + tự tổng hợp số tiền đề nghị quyết toán
+window.onSettProjectChange = async function() {
+  autoDeadline();
+  const projectId = document.getElementById('sm-project').value;
+  const hint = document.getElementById('sm-amount-hint');
+  const amountEl = document.getElementById('sm-amount');
+  if (!projectId) { if (hint) hint.textContent = ''; return; }
+  if (hint) hint.textContent = '⏳ Đang tổng hợp số liệu từ Hợp đồng / Nghiệm thu...';
+  try {
+    const s = await getProjectSummary(projectId);
+    if (s.suggested_amount > 0) {
+      amountEl.value = s.suggested_amount;
+      if (hint) hint.innerHTML = `✅ Tự tổng hợp: <strong>${fmt(s.suggested_amount)}</strong> — ${esc(s.suggested_source)} (${s.contracts.length} HĐ, ${s.acceptances.length} đợt NT). Có thể sửa tay.`;
+    } else {
+      if (hint) hint.textContent = '⚠ ' + s.suggested_source;
+    }
+  } catch (err) {
+    if (hint) hint.textContent = '⚠ Không tổng hợp được số liệu: ' + err.message;
+  }
 };
 
 // Tự tính deadline khi chọn nhóm dự án
@@ -557,6 +608,127 @@ window.submitApprove = async function() {
     errEl.textContent = err.message;
     errEl.style.display = 'block';
   }
+};
+
+// ─── Modal: Xem biểu mẫu quyết toán ──────────────────────────────
+const _FORM_NAMES = {
+  '01/QTDA': 'Báo cáo tổng hợp quyết toán vốn đầu tư dự án',
+  '02/QTDA': 'Danh mục văn bản pháp lý, hợp đồng',
+  '03/QTDA': 'Bảng đối chiếu số liệu cấp vốn, cho vay, thanh toán',
+  '04/QTDA': 'Chi tiết chi phí đầu tư đề nghị quyết toán',
+  '07/QTDA': 'Tình hình công nợ của dự án',
+};
+
+function _fTable(headers, rows) {
+  return `<div class="table-wrapper" style="margin:8px 0 16px"><table>
+    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.length ? rows.join('') : `<tr><td colspan="${headers.length}" style="text-align:center;color:#9ca3af">Chưa có dữ liệu</td></tr>`}</tbody>
+  </table></div>`;
+}
+
+function _fSection(code, extraTitle, bodyHtml) {
+  return `<div style="margin-bottom:20px">
+    <div style="font-weight:700;font-size:14px;border-left:4px solid var(--primary,#2563eb);padding-left:8px;margin-bottom:4px">
+      Mẫu số ${code} — ${_FORM_NAMES[code] || extraTitle || ''}
+    </div>${bodyHtml}</div>`;
+}
+
+window.viewForms = async function(id) {
+  const s = _settList.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('forms-modal').classList.remove('hidden');
+  const body = document.getElementById('forms-modal-body');
+  body.innerHTML = '⏳ Đang tổng hợp số liệu từ Dự án / Hợp đồng / Nghiệm thu...';
+
+  let sum = null;
+  try { sum = await getProjectSummary(s.project_id); } catch (err) {
+    body.innerHTML = `<div class="alert alert-danger">Không tải được dữ liệu tổng hợp: ${esc(err.message)}</div>`;
+    return;
+  }
+
+  const p = sum.project || {};
+  const t = sum.totals || {};
+  const attached = (s.attached_forms || '01/QTDA,02/QTDA,03/QTDA,04/QTDA,07/QTDA').split(',').filter(Boolean);
+  const has = code => attached.includes(code);
+  let html = `
+    <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px">
+      <strong>${esc(p.name || s.project_name || s.project_id)}</strong> (Mã DA: ${esc(p.project_code || s.project_id)})<br>
+      Hồ sơ QT: <strong>${esc(s.settlement_number || s.id)}</strong> — Trạng thái: ${badgeQT(s.status)}<br>
+      📋 Mẫu biểu kèm theo: ${attached.map(esc).join(', ')}
+    </div>`;
+
+  // Mẫu 01 — Báo cáo tổng hợp
+  if (has('01/QTDA')) {
+    html += _fSection('01/QTDA', '', _fTable(['Chỉ tiêu', 'Giá trị (VNĐ)'], [
+      `<tr><td style="padding:6px 12px">Tổng mức đầu tư được duyệt</td><td class="currency">${fmt(p.total_investment)}</td></tr>`,
+      `<tr><td style="padding:6px 12px">Tổng giá trị hợp đồng đã ký (${sum.contracts.length} HĐ)</td><td class="currency">${fmt(t.contract_value)}</td></tr>`,
+      `<tr><td style="padding:6px 12px">Giá trị đề nghị quyết toán</td><td class="currency"><strong>${fmt(s.proposed_settlement_amount)}</strong></td></tr>`,
+      `<tr><td style="padding:6px 12px">Giá trị sau kiểm toán</td><td class="currency">${s.audited_amount ? fmt(s.audited_amount) : '—'}</td></tr>`,
+      `<tr><td style="padding:6px 12px">Giá trị được phê duyệt</td><td class="currency">${s.approved_amount ? fmt(s.approved_amount) : '—'}</td></tr>`,
+      `<tr><td style="padding:6px 12px">Vốn đã giải ngân</td><td class="currency">${fmt(p.disbursed_amount)}</td></tr>`,
+    ]));
+  }
+
+  // Mẫu 02 — Danh mục hợp đồng
+  if (has('02/QTDA')) {
+    html += _fSection('02/QTDA', '', _fTable(
+      ['Số HĐ', 'Tên hợp đồng', 'Nhà thầu', 'Ngày ký', 'Giá HĐ (VNĐ)'],
+      sum.contracts.map(c => `<tr>
+        <td style="font-size:12px">${esc(c.contract_number)}</td>
+        <td style="font-size:12px">${esc(c.contract_name)}</td>
+        <td style="font-size:12px">${esc(c.contractor_name)}</td>
+        <td style="font-size:12px">${fmtDate(c.sign_date)}</td>
+        <td class="currency">${fmt(c.contract_value)}</td></tr>`)
+    ));
+  }
+
+  // Mẫu 03 — Đối chiếu số liệu cấp vốn / thanh toán
+  if (has('03/QTDA')) {
+    html += _fSection('03/QTDA', '', _fTable(['Chỉ tiêu', 'Giá trị (VNĐ)'], [
+      `<tr><td style="padding:6px 12px">Vốn đã giải ngân (theo sheet Dự án)</td><td class="currency">${fmt(p.disbursed_amount)}</td></tr>`,
+      `<tr><td style="padding:6px 12px">Lũy kế đã thanh toán cho nhà thầu</td><td class="currency">${fmt(t.paid_amount)}</td></tr>`,
+      `<tr><td style="padding:6px 12px">Chênh lệch (giải ngân − thanh toán)</td><td class="currency">${fmt((p.disbursed_amount || 0) - (t.paid_amount || 0))}</td></tr>`,
+    ]));
+  }
+
+  // Mẫu 04 — Chi phí đầu tư đề nghị quyết toán
+  if (has('04/QTDA')) {
+    html += _fSection('04/QTDA', '', _fTable(
+      ['Hợp đồng', 'Giá HĐ (VNĐ)', 'Giá QT A-B (VNĐ)', 'Giá trị NT lũy kế (VNĐ)'],
+      sum.contracts.map(c => {
+        const ntTotal = sum.acceptances
+          .filter(a => a.contract_number === c.contract_number)
+          .reduce((x, a) => x + (a.amount || 0), 0);
+        return `<tr>
+          <td style="font-size:12px">${esc(c.contract_number)} — ${esc(c.contractor_name)}</td>
+          <td class="currency">${fmt(c.contract_value)}</td>
+          <td class="currency"><strong>${c.settlement_value ? fmt(c.settlement_value) : '—'}</strong></td>
+          <td class="currency">${ntTotal ? fmt(ntTotal) : '—'}</td></tr>`;
+      })
+    ) + `<div style="font-size:12px;color:#6b7280">Tổng đề nghị quyết toán: <strong>${fmt(s.proposed_settlement_amount)}</strong> (${sum.acceptances.length} đợt nghiệm thu)</div>`);
+  }
+
+  // Mẫu 07 — Công nợ
+  if (has('07/QTDA')) {
+    html += _fSection('07/QTDA', '', _fTable(
+      ['Hợp đồng / Nhà thầu', 'Giá QT hoặc Giá HĐ', 'Đã thanh toán', 'Còn phải trả (+) / Trả thừa (−)'],
+      sum.contracts.map(c => `<tr>
+        <td style="font-size:12px">${esc(c.contract_number)} — ${esc(c.contractor_name)}</td>
+        <td class="currency">${fmt(c.settlement_value || c.contract_value)}</td>
+        <td class="currency">${fmt(c.paid_amount)}</td>
+        <td class="currency" style="color:${c.debt > 0 ? 'var(--danger)' : 'var(--success)'}"><strong>${fmt(c.debt)}</strong></td></tr>`)
+    ) + `<div style="font-size:12px;color:#6b7280">Tổng công nợ: <strong>${fmt(t.debt)}</strong></div>`);
+  }
+
+  // Các mẫu khác chưa có nguồn dữ liệu tự động
+  const manual = attached.filter(c => !['01/QTDA','02/QTDA','03/QTDA','04/QTDA','07/QTDA'].includes(c));
+  if (manual.length) {
+    html += `<div class="alert alert-info" style="font-size:12px">
+      Các mẫu <strong>${manual.map(esc).join(', ')}</strong> cần lập thủ công theo biểu mẫu ban hành kèm Thông tư 73/2026/TT-BTC
+      (chưa có nguồn dữ liệu tự động trong hệ thống).</div>`;
+  }
+
+  body.innerHTML = html;
 };
 
 // ─── Tab Phạt chậm nộp ───────────────────────────────────────────
