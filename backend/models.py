@@ -242,6 +242,10 @@ class SettlementCreate(BaseModel):
     approver_org_id: Optional[str] = None
     verifier_org_id: Optional[str] = None
     submission_deadline: Optional[str] = None
+    # Mở rộng từ sheet "Quyết toán DAHT"
+    project_name: Optional[str] = None          # Tên DA
+    settlement_number: Optional[str] = None     # Số tờ trình / Mã QT
+    contract_group: Optional[str] = None        # Nhóm dự án (A/B/C)
 
 
 class Settlement(SettlementCreate):

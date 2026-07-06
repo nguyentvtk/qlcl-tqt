@@ -4,6 +4,9 @@ Business rules (Nghị định 193/2026/NĐ-CP):
 - 3 lần cảnh báo nhà thầu (Mẫu 02-QTDA) trước khi lập quyết toán độc lập
 - Deadline quyết toán: 6/9/12 tháng sau khi hoàn thành (nhóm C/B/A)
 - Phạt chậm nộp: 0.05%/ngày trên giá trị quyết toán
+
+LƯU Ý ROUTE ORDERING:
+  /warnings/*  phải khai báo TRƯỚC /{settlement_id} để tránh FastAPI match nhầm.
 """
 from datetime import datetime, date, timedelta
 from fastapi import APIRouter, HTTPException, Depends
@@ -26,19 +29,114 @@ def _map_quyet_toan_row(r: dict) -> Settlement | None:
     ma_da = str(r.get("Mã DA", "")).strip()
     if not ma_qt and not ma_da:
         return None
+
+    # Giá trị kiểm toán và phê duyệt (nếu có)
+    audited = sm.parse_vn_number(r.get("Giá trị kiểm toán", 0))
+    approved = sm.parse_vn_number(r.get("Giá trị phê duyệt", 0))
+
     return Settlement(
         id=ma_qt or ma_da,
         project_id=ma_da,
+        project_name=str(r.get("Tên DA", "")).strip(),
+        settlement_number=ma_qt,
+        contract_group=str(r.get("Nhóm DA", "")).strip() or None,
         proposed_settlement_amount=sm.parse_vn_number(r.get("Giá trị đề nghị quyết toán", 0)),
-        approver_org_id=str(r.get("Chủ đầu tư", "")),
-        verifier_org_id=str(r.get("Cơ quan thẩm tra (Kính gửi)", r.get("Cơ quan thẩm tra", ""))) or None,
-        submission_deadline=str(r.get("Ngày lập", "")),
-        status=str(r.get("Trạng thái", "PREPARING")) or "PREPARING",
-        approved_decision_number=str(r.get("Số tờ trình", "")),
+        audited_amount=audited if audited else None,
+        approved_amount=approved if approved else None,
+        approver_org_id=str(r.get("Chủ đầu tư", "")).strip() or None,
+        verifier_org_id=(
+            str(r.get("Cơ quan thẩm tra (Kính gửi)", "")).strip()
+            or str(r.get("Cơ quan thẩm tra", "")).strip()
+            or None
+        ),
+        submission_deadline=str(r.get("Ngày lập", "")).strip() or None,
+        status=str(r.get("Trạng thái", "")).strip() or "PREPARING",
+        approved_decision_number=str(r.get("Số tờ trình", "")).strip() or None,
     )
 
 
+# ─── Contractor Settlement Warnings ────────────────────────────────
+# !! PHẢI khai báo TRƯỚC /{settlement_id} để tránh route conflict !!
+
+@router.get("/warnings", response_model=list[Warning])
+async def list_warnings(
+    contract_id: Optional[str] = None,
+    _: dict = Depends(get_current_user)
+):
+    if contract_id:
+        records = sm.read_where("contractor_settlement_warnings", contract_id=contract_id)
+    else:
+        records = sm.read_all("contractor_settlement_warnings")
+    return [Warning(**r) for r in records]
+
+
+@router.post("/warnings", response_model=Warning, status_code=201)
+async def create_warning(body: WarningCreate, _: dict = Depends(get_current_user)):
+    """
+    Gửi cảnh báo nhà thầu (tối đa 3 lần).
+    Sau 3 lần mà không có phản hồi → lập quyết toán độc lập.
+    """
+    existing = sm.read_where("contractor_settlement_warnings", contract_id=body.contract_id)
+    current_warnings = [w for w in existing if w.get("warning_number") == str(body.warning_number)]
+    if current_warnings:
+        raise HTTPException(400, f"Cảnh báo lần {body.warning_number} đã được gửi")
+
+    if len(existing) >= 3:
+        raise HTTPException(400, "Đã gửi đủ 3 cảnh báo. Có thể lập quyết toán độc lập.")
+
+    record = sm.insert("contractor_settlement_warnings", body.model_dump())
+    return Warning(**record)
+
+
+@router.get("/warnings/overdue")
+async def overdue_warnings(_: dict = Depends(get_current_user)):
+    """Danh sách cảnh báo đã quá hạn phản hồi nhưng không có phản hồi."""
+    all_warnings = sm.read_all("contractor_settlement_warnings")
+    today = date.today()
+    overdue = []
+    for w in all_warnings:
+        if (w.get("contractor_response_status") == "NO_RESPONSE"
+                and w.get("response_deadline")):
+            try:
+                deadline = date.fromisoformat(w["response_deadline"])
+                if today > deadline:
+                    w["overdue_days"] = (today - deadline).days
+                    overdue.append(w)
+            except ValueError:
+                pass
+    return overdue
+
+
+@router.put("/warnings/{warning_id}/delivered")
+async def mark_warning_delivered(warning_id: str, _: dict = Depends(get_current_user)):
+    updated = sm.update("contractor_settlement_warnings", warning_id, {
+        "is_delivered": "TRUE"
+    })
+    if not updated:
+        raise HTTPException(404, "Không tìm thấy cảnh báo")
+    return updated
+
+
+@router.put("/warnings/{warning_id}/response")
+async def update_warning_response(
+    warning_id: str,
+    response_status: str,
+    _: dict = Depends(get_current_user)
+):
+    valid_statuses = ["NO_RESPONSE", "PARTIAL_RESPONSE", "FULL_RESPONSE"]
+    if response_status not in valid_statuses:
+        raise HTTPException(400, f"Trạng thái phải là: {', '.join(valid_statuses)}")
+
+    updated = sm.update("contractor_settlement_warnings", warning_id, {
+        "contractor_response_status": response_status
+    })
+    if not updated:
+        raise HTTPException(404, "Không tìm thấy cảnh báo")
+    return updated
+
+
 # ─── Project Settlements ────────────────────────────────────────────
+
 @router.get("", response_model=list[Settlement])
 async def list_settlements(
     project_id: Optional[str] = None,
@@ -56,7 +154,10 @@ async def list_settlements(
             seen_ids.add(s.id)
 
     # 2. App-created settlements
-    app_records = sm.read_where("project_settlements", project_id=project_id) if project_id else sm.read_all("project_settlements")
+    app_records = (
+        sm.read_where("project_settlements", project_id=project_id)
+        if project_id else sm.read_all("project_settlements")
+    )
     for r in app_records:
         try:
             s = Settlement(**r)
@@ -69,14 +170,6 @@ async def list_settlements(
     return result
 
 
-@router.get("/{settlement_id}", response_model=Settlement)
-async def get_settlement(settlement_id: str, _: dict = Depends(get_current_user)):
-    r = sm.read_by_id("project_settlements", settlement_id)
-    if not r:
-        raise HTTPException(404, "Không tìm thấy hồ sơ quyết toán")
-    return Settlement(**r)
-
-
 @router.post("", response_model=Settlement, status_code=201)
 async def create_settlement(body: SettlementCreate, _: dict = Depends(get_current_user)):
     existing = sm.read_where("project_settlements", project_id=body.project_id)
@@ -84,6 +177,14 @@ async def create_settlement(body: SettlementCreate, _: dict = Depends(get_curren
         raise HTTPException(400, "Dự án đã có hồ sơ quyết toán đang xử lý")
     record = sm.insert("project_settlements", body.model_dump())
     return Settlement(**record)
+
+
+@router.get("/{settlement_id}", response_model=Settlement)
+async def get_settlement(settlement_id: str, _: dict = Depends(get_current_user)):
+    r = sm.read_by_id("project_settlements", settlement_id)
+    if not r:
+        raise HTTPException(404, "Không tìm thấy hồ sơ quyết toán")
+    return Settlement(**r)
 
 
 @router.put("/{settlement_id}/audit")
@@ -154,81 +255,3 @@ async def calculate_penalty(settlement_id: str, _: dict = Depends(get_current_us
         "penalty_rate": "0.05%/ngày",
         "penalty_vnd": round(penalty, 2),
     }
-
-
-# ─── Contractor Settlement Warnings ────────────────────────────────
-@router.get("/warnings", response_model=list[Warning])
-async def list_warnings(
-    contract_id: Optional[str] = None,
-    _: dict = Depends(get_current_user)
-):
-    if contract_id:
-        records = sm.read_where("contractor_settlement_warnings", contract_id=contract_id)
-    else:
-        records = sm.read_all("contractor_settlement_warnings")
-    return [Warning(**r) for r in records]
-
-
-@router.post("/warnings", response_model=Warning, status_code=201)
-async def create_warning(body: WarningCreate, _: dict = Depends(get_current_user)):
-    """
-    Gửi cảnh báo nhà thầu (tối đa 3 lần).
-    Sau 3 lần mà không có phản hồi → lập quyết toán độc lập.
-    """
-    existing = sm.read_where("contractor_settlement_warnings", contract_id=body.contract_id)
-    current_warnings = [w for w in existing if w.get("warning_number") == str(body.warning_number)]
-    if current_warnings:
-        raise HTTPException(400, f"Cảnh báo lần {body.warning_number} đã được gửi")
-
-    if len(existing) >= 3:
-        raise HTTPException(400, "Đã gửi đủ 3 cảnh báo. Có thể lập quyết toán độc lập.")
-
-    record = sm.insert("contractor_settlement_warnings", body.model_dump())
-    return Warning(**record)
-
-
-@router.put("/warnings/{warning_id}/delivered")
-async def mark_warning_delivered(warning_id: str, _: dict = Depends(get_current_user)):
-    updated = sm.update("contractor_settlement_warnings", warning_id, {
-        "is_delivered": "TRUE"
-    })
-    if not updated:
-        raise HTTPException(404, "Không tìm thấy cảnh báo")
-    return updated
-
-
-@router.put("/warnings/{warning_id}/response")
-async def update_warning_response(
-    warning_id: str,
-    response_status: str,
-    _: dict = Depends(get_current_user)
-):
-    valid_statuses = ["NO_RESPONSE", "PARTIAL_RESPONSE", "FULL_RESPONSE"]
-    if response_status not in valid_statuses:
-        raise HTTPException(400, f"Trạng thái phải là: {', '.join(valid_statuses)}")
-
-    updated = sm.update("contractor_settlement_warnings", warning_id, {
-        "contractor_response_status": response_status
-    })
-    if not updated:
-        raise HTTPException(404, "Không tìm thấy cảnh báo")
-    return updated
-
-
-@router.get("/warnings/overdue")
-async def overdue_warnings(_: dict = Depends(get_current_user)):
-    """Danh sách cảnh báo đã quá hạn phản hồi nhưng không có phản hồi."""
-    all_warnings = sm.read_all("contractor_settlement_warnings")
-    today = date.today()
-    overdue = []
-    for w in all_warnings:
-        if (w.get("contractor_response_status") == "NO_RESPONSE"
-                and w.get("response_deadline")):
-            try:
-                deadline = date.fromisoformat(w["response_deadline"])
-                if today > deadline:
-                    w["overdue_days"] = (today - deadline).days
-                    overdue.append(w)
-            except ValueError:
-                pass
-    return overdue
