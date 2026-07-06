@@ -100,6 +100,7 @@ export const dossiers = {
   addSignature: (id, data) => post(`/api/v1/dossiers/${id}/signatures`, data),
   signatures: (id) => get(`/api/v1/dossiers/${id}/signatures`),
   stampOverlay: (formData) => postForm('/api/v1/dossiers/as-built-stamp', formData),
+  driveCheck: () => get('/api/v1/dossiers/drive-check'),
 };
 
 // ─── Contracts ────────────────────────────────────────────────────

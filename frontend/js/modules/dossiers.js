@@ -101,8 +101,10 @@ export async function renderDossiers(container) {
           </div>
         </div>
         <div id="upload-err" class="alert alert-danger" style="display:none;margin-top:12px"></div>
-        <div style="margin-top:16px">
+        <div id="drive-check-result" style="display:none;margin-top:12px;font-size:13px;background:var(--bg-secondary);border-radius:8px;padding:12px;white-space:pre-wrap"></div>
+        <div style="margin-top:16px;display:flex;gap:8px">
           <button class="btn btn-primary" onclick="submitDossier()">📤 Nộp hồ sơ</button>
+          <button class="btn btn-secondary" onclick="checkDrive()">🔧 Kiểm tra kết nối Drive</button>
         </div>
       </div>
     </div>
@@ -335,6 +337,28 @@ window.switchDossierTab = function(tab, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById(`tab-${tab}`).classList.add('active');
   el.classList.add('active');
+};
+
+// Kiểm tra kết nối Google Drive (credentials → thư mục gốc → tạo thử thư mục)
+window.checkDrive = async function() {
+  const box = document.getElementById('drive-check-result');
+  box.style.display = 'block';
+  box.textContent = '⏳ Đang kiểm tra kết nối Google Drive...';
+  try {
+    const r = await dossiers.driveCheck();
+    const labels = {
+      root_folder_id: '📁 Thư mục gốc',
+      service_account: '🤖 Service account',
+      credentials: '🔑 Credentials',
+      access_root: '🚪 Truy cập thư mục gốc',
+      create_folder: '🆕 Tạo thư mục con',
+    };
+    box.textContent = Object.entries(labels)
+      .map(([k, label]) => `${label}: ${r[k] ?? '?'}`)
+      .join('\n');
+  } catch (err) {
+    box.textContent = '✗ Lỗi gọi API: ' + err.message;
+  }
 };
 
 // Gợi ý giai đoạn theo nhóm hồ sơ: Nhóm I → GĐ1, Nhóm II → GĐ2, Nhóm III → GĐ3
