@@ -15,11 +15,79 @@ from typing import Optional
 from models import Dossier, DossierCreate, DossierAction, Signature, SignatureCreate
 from middleware.auth import get_current_user
 from services import drive_service
+from config import PROJECT_PHASES
 import sheets_manager as sm
 
 router = APIRouter(prefix="/api/v1/dossiers", tags=["Hồ sơ & Nghiệm thu"])
 
 _ADMIN_ROLE = "PROJECT_MANAGEMENT"
+
+
+# ─── Helpers: Cây thư mục Drive theo quy ước ──────────────────────
+def _project_folder_name(ma_da: str) -> str:
+    """Tên thư mục dự án: 'NămThựcHiện_MãDA_TenDuAnVietLienKhongDau'."""
+    nam, ten_da = "", ""
+    for r in sm.read_sheet_by_name_raw("Dự án"):
+        if str(r.get("Mã DA", "")).strip() == ma_da:
+            nam = str(r.get("Năm thực hiện", "")).strip()
+            ten_da = str(r.get("Tên dự án", "")).strip()
+            break
+    if not ten_da:  # Dự án tạo trong app
+        for r in sm.read_all("projects"):
+            if str(r.get("project_code", "")).strip() == ma_da or str(r.get("id", "")) == ma_da:
+                ten_da = str(r.get("name", "")).strip()
+                nam = str(r.get("start_date", ""))[:4]
+                break
+    nam = nam or str(datetime.utcnow().year)
+    parts = [nam, ma_da]
+    if ten_da:
+        parts.append(drive_service.vn_ascii(ten_da))
+    return "_".join(parts)
+
+
+def _bid_package_folder_name(ma_da: str, ma_gt: str) -> str:
+    """Tên thư mục gói thầu: 'MãGT_TenGoiThauVietLien' (fallback: Mã GT)."""
+    ten_gt = ""
+    for r in sm.read_sheet_by_name_raw("Gói thầu"):
+        if (str(r.get("Mã DA", "")).strip() == ma_da
+                and str(r.get("Mã GT", "")).strip() == ma_gt):
+            ten_gt = str(r.get("Tên gói thầu", "")).strip()
+            break
+    return f"{ma_gt}_{drive_service.vn_ascii(ten_gt)}" if ten_gt else (ma_gt or "GoiThauKhac")
+
+
+def _resolve_drive_folder(construction_id: str, phase: str, submission_round: str) -> str | None:
+    """
+    Get-or-create cây thư mục:
+      {Năm_MãDA_TenDA}/{phase}/{MãGT_TenGT}/Lan {n}
+    Trả về folder id sâu nhất, hoặc None nếu lỗi (fallback thư mục gốc).
+    """
+    try:
+        if "_" in construction_id:  # composite "MãDA_MãGT" từ sheet gốc
+            ma_da, ma_gt = construction_id.split("_", 1)
+        else:  # gói thầu tạo trong app
+            ma_da, ma_gt = "", construction_id
+            r = sm.read_by_id("constructions", construction_id)
+            if r:
+                ma_gt = str(r.get("construction_code") or construction_id)
+                pid = str(r.get("project_id", ""))
+                p = sm.read_by_id("projects", pid)
+                ma_da = str((p or {}).get("project_code") or pid)
+
+        phase = phase if phase in PROJECT_PHASES else PROJECT_PHASES[1]
+        try:
+            lan = max(1, int(float(str(submission_round).strip() or 1)))
+        except (ValueError, TypeError):
+            lan = 1
+
+        return drive_service.ensure_folder_path([
+            _project_folder_name(ma_da),
+            phase,
+            _bid_package_folder_name(ma_da, ma_gt),
+            f"Lan {lan}",
+        ])
+    except Exception:
+        return None  # fallback: upload vào thư mục gốc
 
 
 # ─── Dossier Templates (master data) ────────────────────────────
@@ -196,6 +264,8 @@ async def upload_dossier(
     document_number: Optional[str] = Form(None),
     sign_date: Optional[str] = Form(None),
     format_type: str = Form(...),
+    phase: str = Form("02_ThucHienDauTu"),
+    submission_round: str = Form("1"),
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
 ):
@@ -205,12 +275,17 @@ async def upload_dossier(
 
     content = await file.read()
 
+    # Xác định thư mục đích theo quy ước:
+    # {Năm_MãDA_TenDA}/{giai đoạn}/{MãGT_TenGT}/Lan {n} (get-or-create)
+    folder_id = _resolve_drive_folder(construction_id, phase, submission_round)
+
     # Upload lên Google Drive
     mime_type = mimetypes.guess_type(file.filename)[0] or "application/octet-stream"
     timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    drive_filename = f"{construction_id}_{template_id}_{timestamp}_{file.filename}"
+    drive_filename = (f"{timestamp}_{file.filename}" if folder_id
+                      else f"{construction_id}_{template_id}_{timestamp}_{file.filename}")
 
-    uploaded = drive_service.upload_file(content, drive_filename, mime_type)
+    uploaded = drive_service.upload_file(content, drive_filename, mime_type, folder_id=folder_id)
     drive_url = uploaded.get("webViewLink", "")
 
     data = {
@@ -221,6 +296,8 @@ async def upload_dossier(
         "sign_date": sign_date or "",
         "file_path": drive_url,          # Lưu Google Drive URL vào cột file_path
         "format_type": format_type,
+        "phase": phase,
+        "submission_round": str(submission_round),
         "status": "PENDING",
         "uploaded_by": user.get("sub", ""),
         "uploaded_at": datetime.utcnow().isoformat(),

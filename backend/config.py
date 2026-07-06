@@ -51,7 +51,15 @@ SKIP_MIGRATION = os.getenv("SKIP_MIGRATION", "false").lower() in ("true", "1", "
 NHANSU_GID = int(os.getenv("NHANSU_GID", "1028022447"))
 
 # Google Drive folder for uploaded dossier files (share this folder with the service account)
-GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
+GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1F0ETsyLiklzeoD432CQddrcLin__d5WN")
+
+# 4 giai đoạn thực hiện dự án — tên thư mục cấp 2 trên Drive
+PROJECT_PHASES = [
+    "01_ChuanBiDauTu",
+    "02_ThucHienDauTu",
+    "03_NghiemThuHoanCong",
+    "04_QuyetToan",
+]
 
 # File upload limits
 MAX_FILE_SIZE_MB = 50

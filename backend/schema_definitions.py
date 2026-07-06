@@ -39,7 +39,8 @@ SHEET_SCHEMAS: dict[str, list[str]] = {
     "construction_dossiers": [
         "id", "construction_id", "template_id", "document_name",
         "document_number", "sign_date", "file_path", "format_type",
-        "status", "uploaded_by", "uploaded_at", "updated_at"
+        "status", "uploaded_by", "uploaded_at", "updated_at",
+        "phase", "submission_round"  # Giai đoạn + Lần nộp (APPEND cuối)
     ],
     "document_signatures": [
         "id", "dossier_id", "signer_id", "signer_role", "signature_hash",

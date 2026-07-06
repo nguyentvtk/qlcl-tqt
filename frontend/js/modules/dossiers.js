@@ -54,7 +54,20 @@ export async function renderDossiers(container) {
           </div>
           <div class="form-group">
             <label>Loại hồ sơ (mẫu) *</label>
-            <select id="d-template"></select>
+            <select id="d-template" onchange="suggestPhase()"></select>
+          </div>
+          <div class="form-group">
+            <label>Giai đoạn thực hiện *</label>
+            <select id="d-phase">
+              <option value="01_ChuanBiDauTu">GĐ1 — Chuẩn bị đầu tư</option>
+              <option value="02_ThucHienDauTu" selected>GĐ2 — Thực hiện đầu tư</option>
+              <option value="03_NghiemThuHoanCong">GĐ3 — Nghiệm thu hoàn công</option>
+              <option value="04_QuyetToan">GĐ4 — Quyết toán</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Lần nộp hồ sơ</label>
+            <input id="d-round" type="number" min="1" value="1" style="width:100px" />
           </div>
           <div class="form-group">
             <label>Tên hồ sơ *</label>
@@ -324,6 +337,16 @@ window.switchDossierTab = function(tab, el) {
   el.classList.add('active');
 };
 
+// Gợi ý giai đoạn theo nhóm hồ sơ: Nhóm I → GĐ1, Nhóm II → GĐ2, Nhóm III → GĐ3
+window.suggestPhase = function() {
+  const tplId = document.getElementById('d-template')?.value;
+  const tpl = _templates.find(t => String(t.id) === String(tplId));
+  const groupCode = tpl?.group?.code || '';
+  const map = { 'I': '01_ChuanBiDauTu', 'II': '02_ThucHienDauTu', 'III': '03_NghiemThuHoanCong' };
+  const phaseSel = document.getElementById('d-phase');
+  if (phaseSel && map[groupCode]) phaseSel.value = map[groupCode];
+};
+
 window.handleFileSelect = function(input) {
   const file = input.files[0];
   if (file) document.getElementById('upload-zone-text').textContent = file.name;
@@ -356,6 +379,8 @@ window.submitDossier = async function() {
   fd.append('document_number', document.getElementById('d-number').value.trim());
   fd.append('sign_date', document.getElementById('d-sign-date').value);
   fd.append('format_type', document.getElementById('d-format').value);
+  fd.append('phase', document.getElementById('d-phase')?.value || '02_ThucHienDauTu');
+  fd.append('submission_round', document.getElementById('d-round')?.value || '1');
   fd.append('file', file);
 
   if (!fd.get('template_id') || !fd.get('document_name') || !fd.get('format_type')) {
@@ -377,6 +402,8 @@ window.submitDossier = async function() {
     document.getElementById('d-template').value = '';
     document.getElementById('d-format').value = '';
     document.getElementById('d-file').value = '';
+    document.getElementById('d-phase').value = '02_ThucHienDauTu';
+    document.getElementById('d-round').value = '1';
     document.getElementById('upload-zone-text').textContent = 'Nhấn để chọn file hoặc kéo thả vào đây';
     switchDossierTab('list', document.querySelector('.tab'));
     await loadDossiers();

@@ -130,6 +130,8 @@ class DossierCreate(BaseModel):
     payment_pct: Optional[str] = None          # % Giá trị NT
     project_name: Optional[str] = None         # Tên DA
     contractor_name: Optional[str] = None      # Nhà thầu
+    phase: Optional[str] = None                # Giai đoạn (01_ChuanBiDauTu...04_QuyetToan)
+    submission_round: Optional[str] = None     # Lần nộp (Lan 1, Lan 2...)
 
 
 class Dossier(DossierCreate):
