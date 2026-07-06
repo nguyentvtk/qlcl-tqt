@@ -123,6 +123,7 @@ class DossierCreate(BaseModel):
     # Mở rộng từ sheet "Nghiệm thu"
     project_code: Optional[str] = None         # Mã DA
     contract_id: Optional[str] = None          # Mã HĐ
+    bid_package_code: Optional[str] = None     # Mã GT (join từ sheet Hợp đồng)
     acceptance_round: Optional[str] = None     # Lần NT
     request_date: Optional[str] = None         # Ngày đề nghị
     payment_amount: Optional[str] = None       # Giá trị NT

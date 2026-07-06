@@ -30,11 +30,13 @@ export async function renderDossiers(container) {
         <div class="table-wrapper">
           <table>
             <thead><tr>
-              <th>Mã HSNT</th><th>Tên hồ sơ</th><th>Mã HĐ</th>
+              <th>Mã HSNT</th>
+              <th>Dự án / Gói thầu</th>
+              <th>Mã HĐ</th>
               <th>Lần NT</th><th>Ngày NT</th><th>Giá trị NT</th>
-              <th>Nhà thầu</th><th>Trạng thái</th><th>Hành động</th>
+              <th>Trạng thái</th><th>Hành động</th>
             </tr></thead>
-            <tbody id="dossier-tbody"><tr><td colspan="9" style="text-align:center">Đang tải...</td></tr></tbody>
+            <tbody id="dossier-tbody"><tr><td colspan="8" style="text-align:center">Đang tải...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -214,29 +216,41 @@ async function loadDossiers() {
     const list = await dossiers.list(params);
 
     if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">📁</div><p>Chưa có hồ sơ nghiệm thu nào</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">📁</div><p>Chưa có hồ sơ nghiệm thu nào</p></div></td></tr>`;
       return;
     }
 
     const tpl = Object.fromEntries(_templates.map(t => [t.id, t]));
 
-    tbody.innerHTML = list.map(d => `
+    tbody.innerHTML = list.map(d => {
+      // Dòng "Dự án / Gói thầu": hiển thị Mã DA và Mã GT nếu có
+      const daGt = [
+        d.project_code   ? `<span style="font-weight:600">${esc(d.project_code)}</span>` : '',
+        d.bid_package_code ? `<span style="color:#6b7280"> / ${esc(d.bid_package_code)}</span>` : '',
+      ].filter(Boolean).join('');
+      const projectLine = daGt
+        ? `<div style="font-size:12px">${daGt}</div>`
+        : '';
+      const nameLine = d.document_name
+        ? `<div style="font-size:12px;color:#374151;margin-top:2px">${esc(d.document_name)}</div>`
+        : '';
+
+      return `
       <tr>
         <td><strong>${esc(d.document_number || d.id)}</strong></td>
-        <td>${esc(d.document_name)}</td>
-        <td>${esc(d.contract_id) || '—'}</td>
+        <td>${projectLine}${nameLine}</td>
+        <td style="font-size:12px">${esc(d.contract_id) || '—'}</td>
         <td>${esc(d.acceptance_round) ? `Lần ${esc(d.acceptance_round)}` : '—'}</td>
         <td>${fmtDate(d.sign_date) || fmtDate(d.request_date) || '—'}</td>
-        <td style="text-align:right">${esc(d.payment_amount) || '—'}</td>
-        <td>${esc(d.contractor_name) || '—'}</td>
+        <td style="text-align:right;font-size:12px">${esc(d.payment_amount) || '—'}</td>
         <td>${badge(d.status)}</td>
         <td>
           ${d.file_path ? `<a href="${dossiers.fileUrl(d.id)}" target="_blank" class="btn btn-secondary btn-sm">📎</a>` : ''}
           ${d.status === 'PENDING' ? `<button class="btn btn-primary btn-sm" onclick="openApproval('${esc(d.id)}')">✓/✗</button>` : ''}
           <button class="btn btn-secondary btn-sm" onclick="viewHistory('${esc(d.id)}')">📜</button>
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="8"><div class="alert alert-danger">${err.message}</div></td></tr>`;
   }

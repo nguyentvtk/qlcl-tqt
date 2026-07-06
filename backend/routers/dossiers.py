@@ -38,7 +38,21 @@ async def list_groups(_: dict = Depends(get_current_user)):
 
 
 # ─── Helpers: Nghiệm thu ─────────────────────────────────────────
-def _map_nghiem_thu_row(r: dict) -> Dossier | None:
+def _build_hop_dong_lookup() -> dict:
+    """Tạo lookup {Mã HĐ → {ma_gt, ten_hd, ma_da}} từ sheet 'Hợp đồng'."""
+    lookup = {}
+    for r in sm.read_sheet_by_name_raw("Hợp đồng"):
+        ma_hd = str(r.get("Mã HĐ", "")).strip()
+        if ma_hd:
+            lookup[ma_hd] = {
+                "ma_gt":  str(r.get("Mã GT", "")).strip(),
+                "ten_hd": str(r.get("Tên HĐ", "")).strip(),
+                "ma_da":  str(r.get("Mã DA", "")).strip(),
+            }
+    return lookup
+
+
+def _map_nghiem_thu_row(r: dict, hop_dong_lookup: dict) -> Dossier | None:
     """Chuyển hàng sheet 'Nghiệm thu' sang Dossier model."""
     ma_hsnt = str(r.get("Mã HSNT", "")).strip()
     ma_hd   = str(r.get("Mã HĐ", "")).strip()
@@ -46,6 +60,11 @@ def _map_nghiem_thu_row(r: dict) -> Dossier | None:
     ten_da  = str(r.get("Tên DA", "")).strip()
     if not ma_hsnt:
         return None
+
+    # Join với bảng Hợp đồng để lấy Mã GT
+    hd_info = hop_dong_lookup.get(ma_hd, {})
+    ma_gt   = hd_info.get("ma_gt", "")
+
     status_map = {
         "Đã thanh toán": "APPROVED",
         "Chờ nghiệm thu": "PENDING",
@@ -55,9 +74,10 @@ def _map_nghiem_thu_row(r: dict) -> Dossier | None:
     return Dossier(
         id=ma_hsnt,
         document_number=ma_hsnt,
-        document_name=f"Hồ sơ NT lần {r.get('Lần NT','1')} – {ten_da}",
+        document_name=ten_da,          # Tên DA hiển thị trực tiếp
         project_code=ma_da,
-        contract_id=ma_hd.strip(),
+        contract_id=ma_hd,
+        bid_package_code=ma_gt,        # Mã GT từ bảng Hợp đồng
         construction_id=ma_da,
         template_id="NT",
         acceptance_round=str(r.get("Lần NT", "")),
@@ -81,6 +101,9 @@ async def list_dossiers(
     status: Optional[str] = None,
     _: dict = Depends(get_current_user)
 ):
+    # Build lookup Mã HĐ → Mã GT một lần duy nhất
+    hop_dong_lookup = _build_hop_dong_lookup()
+
     # 1. Sheet "Nghiệm thu"
     result: list[Dossier] = []
     seen_ids: set[str] = set()
@@ -92,7 +115,7 @@ async def list_dossiers(
             continue
         if project_code and ma_da != project_code:
             continue
-        d = _map_nghiem_thu_row(row)
+        d = _map_nghiem_thu_row(row, hop_dong_lookup)
         if d:
             if status and d.status != status:
                 continue

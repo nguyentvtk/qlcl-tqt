@@ -8,12 +8,17 @@ export function fmt(n) {
   return Number(n).toLocaleString('vi-VN') + ' ₫';
 }
 
-/** Format date */
+/** Format date — hỗ trợ DD/MM/YYYY (Google Sheets) và ISO */
 export function fmtDate(s) {
-  if (!s) return '—';
+  if (!s || s === 'None' || s === 'null') return '—';
+  const str = String(s).trim();
+  // Định dạng DD/MM/YYYY hoặc D/M/YYYY từ Google Sheets → trả về nguyên
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) return str;
   try {
-    return new Date(s).toLocaleDateString('vi-VN');
-  } catch { return s; }
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str;
+    return d.toLocaleDateString('vi-VN');
+  } catch { return str; }
 }
 
 /** Format datetime */
